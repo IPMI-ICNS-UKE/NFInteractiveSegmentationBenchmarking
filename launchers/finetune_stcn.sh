@@ -11,5 +11,5 @@ torchrun /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteracti
 --stage 6 \
 --batch_size 10 \
 --iterations 10000 \
---save_model_interval 10000 \
+--save_model_interval 5000 \
 --use_cycle_loss
