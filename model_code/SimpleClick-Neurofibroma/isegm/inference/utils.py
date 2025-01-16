@@ -95,7 +95,7 @@ def compute_noc_metric(all_ious, iou_thrs, max_clicks=20):
     over_max_list = []
     for iou_thr in iou_thrs:
         scores_arr = np.array([_get_noc(iou_arr, iou_thr)
-                               for iou_arr in all_ious], dtype=np.int)
+                               for iou_arr in all_ious], dtype=np.int16)
 
         score = scores_arr.mean()
         score_std = scores_arr.std()

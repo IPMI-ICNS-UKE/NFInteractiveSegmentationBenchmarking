@@ -229,7 +229,7 @@ class FusionDataset(Dataset):
 
         dist = torch.FloatTensor([dist_1, dist_2])
 
-        cls_gt = np.zeros((384, 384), dtype=np.int)
+        cls_gt = np.zeros((384, 384), dtype=np.int8)
         cls_gt[gt_mask[0] > 0.5] = 1
         cls_gt[gt_mask2[0] > 0.5] = 2
 

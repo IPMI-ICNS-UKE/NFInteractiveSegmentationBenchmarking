@@ -127,7 +127,7 @@ class StaticTransformDataset(Dataset):
         info = {}
         info['name'] = self.im_list[idx]
 
-        cls_gt = np.zeros((3, 384, 384), dtype=np.int)
+        cls_gt = np.zeros((3, 384, 384), dtype=np.int8)
         cls_gt[masks[:,0] > 0.5] = 1
 
         data = {
