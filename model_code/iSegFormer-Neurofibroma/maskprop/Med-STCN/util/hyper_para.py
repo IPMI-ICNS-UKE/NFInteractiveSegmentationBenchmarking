@@ -18,6 +18,12 @@ class HyperParameters():
         parser.add_argument('--yv_root', help='YouTubeVOS data root', default='/work/data/YouTube')
         parser.add_argument('--davis_root', help='DAVIS data root', default='/work/data/DAVIS')
         parser.add_argument('--abd1k_root', help='Abdomen1k data root', default='/work/data/adb1k')
+        
+        # Added for finetuning of STCN on Neurofibroma data
+        parser.add_argument('--nf_root', help='Neurofibroma data root', default='/work/data/processed')
+        parser.add_argument('--fold_root', help='Neurofibroma data root', default='/work/data/splits')
+        parser.add_argument('--fold', default=1, type=int, help='Subset number to use in k-fold cross-validation')
+        parser.add_argument('--output_folder', help='Folder to save the outcome of training', default='/saves')
 
         parser.add_argument('--stage', help='Training stage (0-static images, 1-Blender dataset, 2-DAVIS+YouTubeVOS (300K), 3-DAVIS+YouTubeVOS (150K))', type=int, default=0)
         parser.add_argument('--num_workers', help='Number of datalaoder workers per process', type=int, default=8)
@@ -98,6 +104,13 @@ class HyperParameters():
             self.args['batch_size'] = none_or_default(self.args['batch_size'], 4)
             self.args['iterations'] = none_or_default(self.args['iterations'], 450000)
             self.args['steps'] = none_or_default(self.args['steps'], [50000])
+            self.args['single_object'] = False
+        elif self.args['stage'] == 6:
+            # Added configuration for finetuning on Neurofibroma data
+            self.args['lr'] = none_or_default(self.args['lr'], 1e-6)
+            self.args['batch_size'] = none_or_default(self.args['batch_size'], 4)
+            self.args['iterations'] = none_or_default(self.args['iterations'], 50000)
+            self.args['steps'] = none_or_default(self.args['steps'], [10000])
             self.args['single_object'] = False
         else:
             raise NotImplementedError
