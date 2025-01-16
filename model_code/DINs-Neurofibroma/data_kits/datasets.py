@@ -454,7 +454,7 @@ def get_loader_test(opt, logger, data_list):
 
     def data_fn(pid):
         volume = nf_kits.read_nii(data[pid]["img_path"])[1].astype(np.float32)
-        meta, label = nf_kits.read_nii(data[pid]["lab_path"], np.int8)
+        meta, label = nf_kits.read_nii(data[pid]["lab_path"], int)
         label = np.clip(label, 0, 1)
         if volume.min() < 0:
             volume[volume < 0] = 0
@@ -536,7 +536,7 @@ def get_loader_test_with_box(opt, logger, data_list):
 
     def data_fn(pid):
         volume = nf_kits.read_nii(data[pid]["img_path"])[1].astype(np.float32)
-        meta, label = nf_kits.read_nii(data[pid]["lab_path"], np.int8)
+        meta, label = nf_kits.read_nii(data[pid]["lab_path"], int)
         label = np.clip(label, 0, 1)
         return volume, label, meta
 

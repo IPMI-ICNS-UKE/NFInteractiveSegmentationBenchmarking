@@ -101,6 +101,7 @@ class NeurofibromaDataset(Dataset):
             for f_idx in frames_idx:
                 jpg_name = frames[f_idx][:-4] + '.jpg'
                 png_name = frames[f_idx][:-4] + '.png'
+               
                 info['frames'].append(jpg_name)
 
                 reseed(sequence_seed)
@@ -149,7 +150,7 @@ class NeurofibromaDataset(Dataset):
             sec_masks = np.zeros_like(tar_masks)
             selector = torch.FloatTensor([1, 0])
 
-        cls_gt = np.zeros((3, 384, 384), dtype=np.int8)
+        cls_gt = np.zeros((3, 384, 384), dtype=int)
         cls_gt[tar_masks[:,0] > 0.5] = 1
         cls_gt[sec_masks[:,0] > 0.5] = 2
 
