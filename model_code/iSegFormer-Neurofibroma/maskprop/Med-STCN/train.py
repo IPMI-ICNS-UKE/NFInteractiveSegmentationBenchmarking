@@ -12,6 +12,7 @@ from model.model import STCNModel
 from dataset.static_dataset import StaticTransformDataset
 from dataset.vos_dataset import VOSDataset
 from dataset.med_dataset import MedDataset
+from dataset.neurofibroma_dataset import NeurofibromaDataset
 
 from util.logger import TensorboardLogger
 from util.hyper_para import HyperParameters
@@ -57,8 +58,9 @@ if local_rank == 0:
     logger.log_string('hyperpara', str(para))
 
     # Construct the rank 0 model
+    # Added the configurable path for saving the training outcomes
     model = STCNModel(para, logger=logger, 
-                    save_path=path.join('saves', long_id, long_id) if long_id is not None else None, 
+                    save_path=path.join(para["output_folder"], long_id, long_id) if long_id is not None else None, 
                     local_rank=local_rank, world_size=world_size).train()
 else:
     # Construct model for other ranks
@@ -101,6 +103,28 @@ def renew_abd1k_loader(max_skip):
     print('Concat dataset size: ', len(train_dataset))
     print('Renewed with skip: ', max_skip)
 
+    return construct_loader(train_dataset)
+
+def renew_neurofibroma_loader(max_skip):
+    neurofibroma_root = para['nf_root']
+    fold_file_path = path.join(
+        para['fold_root'], 
+        f'fold_{para["fold"]}',
+        'train_set.txt'
+        )
+    fold_file = load_sub_yv(path=fold_file_path)
+    neurofibroma_dataset = NeurofibromaDataset(
+        im_root=path.join(neurofibroma_root, 'imagesTr'),
+        gt_root=path.join(neurofibroma_root, 'labelsTr_instance'),
+        max_jump=max_skip,
+        subset=fold_file
+    )
+    
+    train_dataset = ConcatDataset([neurofibroma_dataset])
+    print('Neurofibroma dataset size: ', len(neurofibroma_dataset))
+    print('Concat dataset size: ', len(train_dataset))
+    print('Renewed with skip: ', max_skip)
+    
     return construct_loader(train_dataset)
 
 def renew_vos_loader(max_skip):
@@ -183,6 +207,12 @@ elif para['stage'] == 5:
     increase_skip_fraction = [0.1, 0.2, 0.3, 0.4, 0.9, 1.0]
     train_sampler, train_loader = renew_vos_loader(5)
     renew_loader = renew_vos_loader
+elif para['stage'] == 6:
+    # stage 6: fine-tuning on Neurofibroma data
+    skip_values = [2, 2, 2, 1, 1]
+    increase_skip_fraction = [0.1, 0.2, 0.3, 0.4, 0.9, 1.0]
+    train_sampler, train_loader = renew_neurofibroma_loader(1)
+    renew_loader = renew_neurofibroma_loader
 else:
     raise NotImplementedError
 
