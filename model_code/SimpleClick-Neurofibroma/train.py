@@ -33,6 +33,10 @@ def parse_args():
     parser.add_argument('--exp-name', type=str, default='',
                         help='Here you can specify the name of the experiment. '
                              'It will be added as a suffix to the experiment folder.')
+    
+    # Added command line parameter that chooses a fold to perform cross-validation
+    parser.add_argument('--fold', type=int, default=1,
+                        help='Subset number to use in k-fold cross-validation.')
 
     parser.add_argument('--workers', type=int, default=4,
                         metavar='N', help='Dataloader threads.')
