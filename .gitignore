@@ -173,7 +173,7 @@ cython_debug/
 # Ignore project-specific instances
 data/raw/*
 data/processed/*
-model
 *.pt
 *.pth
 experiments/*
+launchers/log
