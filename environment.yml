@@ -103,9 +103,7 @@ dependencies:
       - pyparsing==3.2.1
       - pytz==2024.2
       - pyyaml==6.0.2
-      - sacred==0.8.3
       - safetensors==0.5.2
-      - sam-2==1.0
       - scikit-image==0.25.0
       - scipy==1.15.1
       - shapely==2.0.6
