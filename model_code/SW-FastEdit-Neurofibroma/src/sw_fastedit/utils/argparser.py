@@ -89,8 +89,9 @@ def parse_args():
         default=0,
         help="Limit the amount of training/validation samples to a fixed number",
     )
+    # Added Neurofibroma dataset to the list of choices
     parser.add_argument(
-        "--dataset", default="AutoPET", choices=["AutoPET", "AutoPET2", "HECKTOR", "MSD_Spleen", "AutoPET2_Challenge"]
+        "--dataset", default="AutoPET", choices=["AutoPET", "AutoPET2", "HECKTOR", "MSD_Spleen", "AutoPET2_Challenge", "Neurofibroma"] 
     )
     parser.add_argument(
         "--use_test_data_for_validation", default=False, action="store_true", help="Use the test data instead of the split of the training data for validation. May not work for all models but is tested for AutoPET"
@@ -201,6 +202,10 @@ def parse_args():
     # only needed for training
     parser.add_argument("--train_loss_stopping_threshold", type=float, default=0.1)
     parser.add_argument("--train_iteration_probability", type=float, default=0.5)
+    
+    # Added for fine-tuning SW-FastEdit on Neurofibroma data
+    parser.add_argument("--fold_dir", required=True, help="Base folder for fold description file")
+    parser.add_argument("--fold", type=int, default=1)
 
     # Set up additional information concerning the environment and the way the script was called
     args = parser.parse_args()

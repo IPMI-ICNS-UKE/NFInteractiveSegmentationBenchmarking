@@ -45,6 +45,7 @@ from monai.transforms import (  # RandShiftIntensityd,; Resized,; ScaleIntensity
     # ToNumpyd,
     ToTensord,
     VoteEnsembled,
+    NormalizeIntensityd
 )
 from monai.utils.enums import CommonKeys
 
@@ -87,6 +88,7 @@ def get_spacing(args):
     HECKTOR_SPACING = (2.03642011, 2.03642011, 3.0)
     #HECKTOR_SPACING = (2,2,2)
     #HECKTOR_SPACING = (4 * 0.98, 4 * 0.98, 1 * 3.27)
+    NUEROFIBROMA_SPACING = (0.625, 0.625, 7.8)
 
     if args.dataset == "AutoPET" or args.dataset == "AutoPET2" or args.dataset == "AutoPET2_Challenge":
         return AUTOPET_SPACING
@@ -94,6 +96,8 @@ def get_spacing(args):
         return HECKTOR_SPACING
     elif args.dataset == "MSD_Spleen":
         return MSD_SPLEEN_SPACING
+    elif args.dataset == "Neurofibroma":
+        return NUEROFIBROMA_SPACING
     # return spacing
 
 
@@ -176,6 +180,63 @@ def get_pre_transforms_train_as_list(labels: Dict, device, args, input_keys=("im
             for i in range(len(t)):
                 t[i] = TrackTimed(t[i])
             print(t)
+    
+    # Added to fine-tune / train SW-FastEdit on Neurofirboma data
+    elif args.dataset == "Neurofibroma":
+        t = [
+            # Initial transforms on the CPU which does not hurt since they are executed asynchronously and only once
+            InitLoggerd(
+                loglevel=loglevel, no_log=args.no_log, log_dir=args.output_dir
+            ),  # necessary if the dataloader runs in an extra thread / process
+            LoadImaged(
+                keys=input_keys,
+                reader="ITKReader",
+                image_only=False,
+                simple_keys=True,
+            ),
+            ToTensord(keys=input_keys, device=cpu_device, track_meta=True),
+            EnsureChannelFirstd(keys=input_keys),
+            NormalizeLabelsInDatasetd(keys="label", labels=labels, device=cpu_device, allow_missing_keys=True),
+            Orientationd(keys=input_keys, axcodes="RSA"),
+            Spacingd(keys='image', pixdim=spacing),
+            Spacingd(keys='label', pixdim=spacing, mode="nearest") if ('label' in input_keys) else Identityd(keys=input_keys, allow_missing_keys=True),
+            NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+            
+            # Random Transforms
+            # allow_smaller=True not necessary for the default AUTOPET split of (224,)**3, just there for safety so that training does not get interrupted
+            RandCropByPosNegLabeld(
+                keys=input_keys,
+                label_key="label",
+                spatial_size=args.train_crop_size,
+                pos=args.positive_crop_rate,
+                neg=1 - args.positive_crop_rate,
+                allow_smaller=True,
+            )
+            if args.train_crop_size is not None
+            else Identityd(keys=input_keys, allow_missing_keys=True),
+            DivisiblePadd(keys=input_keys, k=32, value=0),
+            
+            RandFlipd(keys=input_keys, spatial_axis=[0], prob=0.10),
+            RandFlipd(keys=input_keys, spatial_axis=[1], prob=0.10),
+            RandFlipd(keys=input_keys, spatial_axis=[2], prob=0.10),
+
+            SignalFillEmptyd(input_keys),
+            AddEmptySignalChannels(keys=input_keys, device=cpu_device)
+            if not args.non_interactive
+            else Identityd(keys=input_keys, allow_missing_keys=True),
+            # PrintDatad(),
+            # Move to GPU
+            # WARNING: Activating the line below leads to minimal gains in performance
+            # However you are buying these gains with a lot of weird errors and problems
+            # So my recommendation after months of fiddling is to leave this off
+            # Until MONAI has fixed the underlying issues
+            # ToTensord(keys=("image", "label"), device=device, track_meta=False),
+        ]
+
+        if args.debug:
+            for i in range(len(t)):
+                t[i] = TrackTimed(t[i])
+            print(t)
 
     return t
 
@@ -230,6 +291,45 @@ def get_pre_transforms_val_as_list(labels: Dict, device, args, input_keys=("imag
             DivisiblePadd(keys=input_keys, k=32, value=0)
             if args.inferer == "SimpleInferer"
             else Identityd(keys=input_keys, allow_missing_keys=True),
+            AddEmptySignalChannels(keys=input_keys, device=cpu_device)
+            if not args.non_interactive
+            else Identityd(keys=input_keys, allow_missing_keys=True),
+        ]
+    
+    elif args.dataset == "Neurofibroma":
+        t = [
+            # Initial transforms on the inputs done on the CPU which does not hurt since they are executed asynchronously and only once
+            InitLoggerd(
+                loglevel=loglevel, no_log=args.no_log, log_dir=args.output_dir
+            ),  # necessary if the dataloader runs in an extra thread / process
+            LoadImaged(keys=input_keys, reader="ITKReader", image_only=False),
+            EnsureChannelFirstd(keys=input_keys),
+            NormalizeLabelsInDatasetd(keys="label", labels=labels, device=cpu_device, allow_missing_keys=True),
+            
+            Orientationd(keys=input_keys, axcodes="RSA"),
+            Spacingd(keys='image', pixdim=spacing),
+            Spacingd(keys='label', pixdim=spacing, mode="nearest") if ('label' in input_keys) else Identityd(keys=input_keys, allow_missing_keys=True),
+            NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+            
+            CheckTheAmountOfInformationLossByCropd(
+                keys="label", roi_size=args.val_crop_size, crop_foreground=args.crop_foreground
+            )
+            if "label" in input_keys
+            else Identityd(keys=input_keys, allow_missing_keys=True),
+
+            RandCropByPosNegLabeld(
+                keys=input_keys,
+                label_key="label",
+                spatial_size=args.train_crop_size,
+                pos=args.positive_crop_rate,
+                neg=1 - args.positive_crop_rate,
+                allow_smaller=True,
+            )
+            if args.train_crop_size is not None
+            else Identityd(keys=input_keys, allow_missing_keys=True),
+            DivisiblePadd(keys=input_keys, k=32, value=0),
+            
+            DivisiblePadd(keys=input_keys, k=32, value=0),
             AddEmptySignalChannels(keys=input_keys, device=cpu_device)
             if not args.non_interactive
             else Identityd(keys=input_keys, allow_missing_keys=True),
@@ -546,6 +646,42 @@ def get_HECKTOR_file_list(args) -> List[List, List, List]:
     test_data = [{"image": image_name} for image_name in test_images]
     return train_data, val_data, test_data
 
+def get_Neurofibroma_file_list(args) -> List[List, List, List]:
+    # Get all available images and labels
+    all_images = sorted(glob.glob(os.path.join(args.input_dir, "imagesTr", "*.nii.gz")))
+    all_labels = sorted(glob.glob(os.path.join(args.input_dir, "labelsTr", "*.nii.gz")))
+    
+    # Create a dictionary for quick lookup of images and labels by their file names (without extensions)
+    image_dict = {os.path.basename(image).replace(".nii.gz", ""): image for image in all_images}
+    label_dict = {os.path.basename(label).replace(".nii.gz", ""): label for label in all_labels}
+    
+    # Paths to the text files defining train and test sets
+    train_set_path = os.path.join(args.fold_dir, f"fold_{args.fold}", "train_set.txt")
+    val_set_path = os.path.join(args.fold_dir, f"fold_{args.fold}", "val_set.txt")
+    
+    # Read train and test file names from the text files
+    with open(train_set_path, "r") as f:
+        train_files = [line.strip() for line in f if line.strip()]
+
+    with open(val_set_path, "r") as f:
+        val_files = [line.strip() for line in f if line.strip()]
+    
+    # Build the train and validation datasets
+    train_data = [
+        {"image": image_dict[file_name], "label": label_dict[file_name]}
+        for file_name in train_files
+        if file_name in image_dict and file_name in label_dict
+    ]
+
+    val_data = [
+        {"image": image_dict[file_name], "label": label_dict[file_name]}
+        for file_name in val_files
+        if file_name in image_dict and file_name in label_dict
+    ]
+    
+    test_data = val_data
+
+    return train_data, val_data, test_data
 
 def get_data(args):
     logger.info(f"{args.dataset=}")
@@ -562,6 +698,8 @@ def get_data(args):
         train_data, val_data, test_data = get_AutoPET2_file_list(args)
     elif args.dataset == "HECKTOR":
         train_data, val_data, test_data = get_HECKTOR_file_list(args)
+    elif args.dataset == "Neurofibroma":
+        train_data, val_data, test_data = get_Neurofibroma_file_list(args)
 
     if args.train_on_all_samples:
         train_data += val_data
