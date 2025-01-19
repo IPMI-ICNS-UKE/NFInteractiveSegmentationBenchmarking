@@ -5,5 +5,5 @@ python /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractive
 /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/model_code/SimpleClick-Neurofibroma/models/iter_mask/plainvit_base_1024_neurofibroma_itermask.py \
 --exp-name="NF_finetune" \
 --fold=1 \
---batch-size=4 \
+--batch-size=10 \
 --ngpus=1 
