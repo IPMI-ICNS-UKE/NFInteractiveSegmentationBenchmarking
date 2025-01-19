@@ -110,7 +110,6 @@ dependencies:
       - pytz==2024.2
       - pyyaml==6.0.2
       - safetensors==0.5.2
-      - sam-2==1.0
       - scikit-image==0.25.0
       - scipy==1.15.1
       - shapely==2.0.6
@@ -125,7 +124,6 @@ dependencies:
       - tensorboard-data-server==0.7.2
       - tensorboard-plugin-wit==1.8.1
       - tensordict==0.6.2
-      - thinplate==1.0.0
       - threadpoolctl==3.5.0
       - tifffile==2025.1.10
       - timm==1.0.13
