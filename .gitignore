@@ -178,3 +178,6 @@ data/processed/*
 experiments/*
 launchers/log
 best_ckpt/
+sam2_logs/
+model_weights/*
+!model_weights/README.MD
