@@ -16,8 +16,16 @@ SETTINGS.DISCOVER_SOURCES = "sys"
 SETTINGS.DISCOVER_DEPENDENCIES = "sys"
 
 # Paths
-FOLD_PATH = "data/NF/split.csv"         # data list and split
-TEST_PATH = "data/NF/split_test.csv"    # data list and split for testing
+# The following global constants are updated for use with UKE Neurofibroma dataset
+UKE_DATA_ROOT = "/home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/data/raw" 
+FOLD_PATH = "/home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/data/splits" 
+TEST_PATH = "/home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/data/splits"
+CURRENT_FOLD = 1
+EPOCHS = 250
+ITERATIONS_IN_EPOCH = 1600
+UKE_DATASET_IN_USE = True
+UKE_TARGET_SPACING = (1.7, 1.7, 7.8) # Calculated as average spacing to which the scans from the UKE dataset should be alligned to match the expected sizes in original DINs
+UKE_TEST_SUBSET = 1
 BBOX_PATH = "data/NF/nf_box.csv"        # bounding box list, negative coordinates means using the whole image
 
 
@@ -34,7 +42,7 @@ def setup(ex):
             host = "localhost"          # str, MongoDB host address
             port = 7000                 # int, MongoDB port
         tag = "default"                 # str, Configuration tag
-        logdir = "logs"                 # str, Directory to save checkpoint and logs
+        logdir = "/home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/experiments/DINs/logs" # str, Directory to save checkpoint and logs
 
         # model
         model = "din"                   # str, model name
@@ -45,7 +53,7 @@ def setup(ex):
         gamma = 1.                      # float, scale of ExpDT
 
         # data loader
-        fold = 0                        # int, test fold number, other folds are training folds
+        fold = CURRENT_FOLD             # int, test fold number, other folds are training folds
         depth = 10                      # int, volume depth, numbers of the scan planes
         height = 512                    # int, volume height, height of single scanning plane
         width = 160                     # int, volume width, width of single scanning plane
@@ -57,7 +65,7 @@ def setup(ex):
         tumor_percent = 0.5             # float, minimum sample percentage in a batch containing tumors
         guide = "exp"                   # str, guide type [none|exp|euc|geo]
         exp_stddev = (1., 5., 5.)       # float, Stddev for ExpDT guide
-        train_n = 1600                  # int, number of samples per training epoch
+        train_n = ITERATIONS_IN_EPOCH   # int, number of samples per training epoch
         val_n = train_n // 10           # int, Number of samples for evaluation
         test_depth = -1                 # int, test image depth, -1 means accepting various depths
         test_height = 960               # int, test image height, target height to resize
@@ -67,7 +75,7 @@ def setup(ex):
         geo_iter = 1                    # int, geodesic iteration
 
         # training
-        epochs = 250                    # int, Number of epochs for training
+        epochs = EPOCHS                 # int, Number of epochs for training
         lr = 3e-4                       # float, Base learning rate for model training
         lrp = "plateau"                 # str, Learning rate policy [custom|period|poly|plateau]
         if lrp == "step":
@@ -114,7 +122,12 @@ def setup(ex):
         resume_dir = ""                 # str, resume checkpoint from this directory
         if test_set == 'test':
             fold_path = TEST_PATH
-
+        
+        # Specific for training with UKE Neurofibroma data
+        data_root = UKE_DATA_ROOT
+        spacing = UKE_TARGET_SPACING
+        uke_dataset = UKE_DATASET_IN_USE
+        test_subset = UKE_TEST_SUBSET
 
     @ex.config_hook
     def config_hook(config, command_name, logger):

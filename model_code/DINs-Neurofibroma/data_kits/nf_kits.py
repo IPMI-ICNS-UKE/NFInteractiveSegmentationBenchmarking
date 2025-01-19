@@ -142,8 +142,12 @@ def filter_tiny_nf(mask):
     return mask
 
 
-def slim_labels(data, logger):
-    slim_labels_path = DATA_ROOT / "slim_labels.pkl.gz"
+def slim_labels(data, logger, opt=None):
+    if not opt.uke_dataset:
+        # Use default data root
+        slim_labels_path = DATA_ROOT / "slim_labels.pkl.gz"
+    else:
+        slim_labels_path = opt.data_root / "slim_labels.pkl.gz"
     if slim_labels_path.exists():
         logger.info(' ' * 11 + f"==> Loading slimmed label cache from {slim_labels_path}")
         with slim_labels_path.open("rb") as f:
@@ -172,3 +176,215 @@ def load_test_data_paths():
         pid = int(path.name.split("-")[0])
         dataset[pid] = {"img_path": path, "lab_path": path.parent / path.name.replace("img", "mask")}
     return dataset
+
+# Functions added during finetuning / training of DINs on Neurofibroma_UKE data
+import SimpleITK as sitk
+
+# Function to reorient an image to RAS
+def reorient_to_rsa(image):
+    # Reorient the image to RAS
+    orient_filter = sitk.DICOMOrientImageFilter()
+    orient_filter.SetDesiredCoordinateOrientation("RSA")
+    ras_image = orient_filter.Execute(image)
+    return ras_image
+
+# Function to resample an image to the desired spacing
+def resample_image(image, spacing):
+    original_spacing = image.GetSpacing()
+    original_size = image.GetSize()
+
+    # Compute new size based on the desired spacing
+    new_size = [
+        int(round(original_size[i] * (original_spacing[i] / spacing[i])))
+        for i in range(3)
+    ]
+
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetOutputSpacing(spacing)
+    resampler.SetSize(new_size)
+    resampler.SetInterpolator(sitk.sitkLinear)
+    resampler.SetOutputOrigin(image.GetOrigin())
+    resampler.SetOutputDirection(image.GetDirection())
+    return resampler.Execute(image)
+
+# Function to apply Z-score normalization
+def z_score_normalization(image):
+    array = sitk.GetArrayFromImage(image)
+    mean = array.mean()
+    std = array.std()
+    normalized_array = (array - mean) / std
+    return sitk.GetImageFromArray(normalized_array, isVector=image.GetNumberOfComponentsPerPixel() > 1)
+
+def read_nii_uke_nf(file_name, spacing=(1.7, 1.7, 7.8), special=False, only_header=False, is_label=False):
+    if is_label:
+        out_dtype = np.uint8
+    else:
+        out_dtype = np.float32
+        
+    image = sitk.ReadImage(str(file_name))
+
+    if only_header:
+        return image.GetMetaDataKeys()
+
+    # Reorient to RSA
+    image = reorient_to_rsa(image)
+
+    # Resample to desired spacing
+    image = resample_image(image, spacing)
+    
+    if is_label:
+        # Apply Z-score normalization
+        image = z_score_normalization(image)
+
+    # Convert to numpy array
+    data = sitk.GetArrayFromImage(image).astype(out_dtype)
+
+    # Handle special case (e.g., flipping along an axis)
+    if special:
+        data = np.flip(data, axis=2)
+
+    # Extract metadata similar to vh
+    meta_data = {
+        "spacing": image.GetSpacing(),
+        "origin": image.GetOrigin(),
+        "direction": image.GetDirection(),
+        "size": image.GetSize(),
+    }
+
+    return meta_data, data
+
+def load_data_uke_nf(logger, opt):
+    # Define data directories
+    images_dir = Path(opt.data_root) / "imagesTr"
+    labels_dir = Path(opt.data_root) / "labelsTr"
+    
+    # List of image files
+    path_list = sorted(images_dir.glob("*.nii.gz"))
+
+    logger.info(' ' * 11 + f"==> Loading data ({len(path_list)} examples) ...")
+
+    # Define cache file path
+    cache_path = Path(opt.data_root) / "cache.pkl.gz"
+    
+    # Load data from cache if available
+    if cache_path.exists():
+        logger.info(' ' * 11 + f"==> Loading data cache from {cache_path}")
+        with cache_path.open("rb") as f:
+            data = zlib.decompress(f.read())
+            _data_cache = pickle.loads(data)
+        logger.info(' ' * 11 + "==> Finished!")
+        return _data_cache
+
+    _data_cache = {}
+    
+     # Process each case
+    for image_path in tqdm.tqdm(path_list):
+        # Extract patient ID from the filename
+        pid = image_path.stem.split(".")[0]
+        
+        # Load image volume
+        header, volume = read_nii_uke_nf(file_name=image_path, spacing=opt.spacing, is_label=False)
+
+        # Derive corresponding label path
+        label_path = labels_dir / image_path.name
+        # Load label volume
+        _, label = read_nii_uke_nf(file_name=label_path, spacing=opt.spacing, is_label=True)
+        
+        # Ensure the volume and label shapes match
+        assert volume.shape == label.shape, f"{volume.shape} vs {label.shape}"
+        
+        # Cache the data
+        _data_cache[pid] = {
+            "im_path": image_path.absolute(),
+            "la_path": label_path.absolute(),
+            "img": volume,
+            "lab": label.astype(np.uint8),
+            "pos": np.stack(np.where(label > 0), axis=1),
+            "meta": header,
+            "lab_rng": np.unique(label)
+        }
+        
+    with cache_path.open("wb") as f:
+        logger.info(' ' * 11 + f"==> Saving data cache to {cache_path}")
+        cache_s = pickle.dumps(_data_cache, pickle.HIGHEST_PROTOCOL)
+        f.write(zlib.compress(cache_s))
+    logger.info(' ' * 11 + "==> Finished!")
+    return _data_cache
+
+def load_split_uke_nf(set_key, test_fold, fold_path, opt):
+    # Define the folder containing the splits
+    split_folder = Path(fold_path) / f"fold_{test_fold}"
+    
+    if set_key in ["train", "eval_online", "eval"]:
+        # Define file paths for train and validation sets
+        train_file = split_folder / "train_set.txt"
+        val_file = split_folder / "val_set.txt"
+
+        if not train_file.exists() or not val_file.exists():
+            raise FileNotFoundError(f"Train or validation file missing in {split_folder}")
+
+        # Read the file names from the text files
+        with train_file.open("r") as f:
+            train_set = [line.strip() for line in f.readlines()]
+
+        with val_file.open("r") as f:
+            val_set = [line.strip() for line in f.readlines()]
+
+        # Form a DataFrame with columns: split, pid, remove
+        data = []
+        if set_key == "train":
+            for pid in train_set:
+                if pid not in val_set:
+                    data.append({"split": 0, "pid": pid, "remove": 0})
+            for pid in val_set:
+                data.append({"split": test_fold, "pid": pid, "remove": 0})
+        else:
+            for pid in val_set:
+                data.append({"split": test_fold, "pid": pid, "remove": 0})
+
+        return pd.DataFrame(data)
+
+    
+    elif set_key == "test":
+        # For the test set, return all files in the test directories
+        test_images_dir = Path(opt.data_root) / f"imagesTs_{test_fold}"
+
+        # Gather all test image filenames without extensions
+        test_set = [path.stem.split(".")[0] for path in test_images_dir.glob("*.nii.gz")]
+        
+         # Form a DataFrame with columns: split, pid, remove
+        data = []
+        for pid in test_set:
+            data.append({"split": 0, "pid": pid, "remove": 0})
+        return pd.DataFrame(data)
+
+    else:
+        raise ValueError(f"`set_key` supports [train|eval_online|eval|test], got {set_key}")
+    
+def load_test_data_paths_uke_nf(opt):
+    # Define test subset folders based on opt.test_subset
+    test_images_dir = Path(opt.data_root) / f"imagesTs_{opt.test_subset}"
+    test_labels_dir = Path(opt.data_root) / f"labelsTs_{opt.test_subset}"
+    
+    # List of image files in the test images directory
+    path_list = sorted(test_images_dir.glob("*.nii.gz"))
+    
+    # Initialize dataset dictionary
+    dataset = {}
+
+    # Process each test case
+    for image_path in path_list:
+        # Extract patient ID from the filename
+        pid = image_path.stem.split(".")[0]
+
+        # Derive corresponding label path
+        label_path = test_labels_dir / image_path.name
+
+        # Add paths to the dataset
+        dataset[pid] = {
+            "img_path": image_path,
+            "lab_path": label_path
+        }
+
+    return dataset
+    

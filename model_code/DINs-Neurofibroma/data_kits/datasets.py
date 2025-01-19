@@ -26,7 +26,10 @@ def check_size(shape, *args):
 
 
 def loads(opt, logger, set_key):
-    data_list = nf_kits.load_split(set_key, opt.fold, opt.fold_path)
+    if not opt.uke_dataset:
+        data_list = nf_kits.load_split(set_key, opt.fold, opt.fold_path)
+    else:
+        data_list = nf_kits.load_split_uke_nf(set_key, opt.fold, opt.fold_path, opt)
 
     if set_key in ["train", "eval_online"]:
         return get_loader_train(opt, logger, data_list, set_key)
@@ -40,11 +43,16 @@ def loads(opt, logger, set_key):
         raise ValueError
 
 
-def load_data(logger=None):
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
+def load_data(logger=None, opt=None):
     global _data_cache
 
     if _data_cache is None:
-        _data_cache = nf_kits.load_data(logger)
+        if not opt.uke_dataset:
+            _data_cache = nf_kits.load_data(logger)
+        else:
+            _data_cache = nf_kits.load_data_uke_nf(logger, opt)
     return _data_cache
 
 
@@ -114,7 +122,7 @@ def inter_simulation(mask, sampler, margin=3, step=10, n=11, bg=False, d=40, str
     small = False
     first = True
     all_pts = []
-    struct = np.zeros((3, 3, 3), dtype=np.bool)
+    struct = np.zeros((3, 3, 3), dtype=bool)
     struct[1] = True
     g = binary_erosion(mask, struct, iterations=margin, border_value=bg)
     if bg and strategy != 0:
@@ -177,6 +185,8 @@ def get_pts(lab_patch, num_inters_max, sampler):
     return fg_pts, bg_pts
 
 
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
 def data_processing(img, lab, *pts, opt=None, logger=None, mode=None):
     """
     Pre-process training data with tensorflow API
@@ -201,8 +211,9 @@ def data_processing(img, lab, *pts, opt=None, logger=None, mode=None):
         guide: with shape [depth, height, width, 2]
     lab: tf.Tensor, with shape [depth, height, width]
     """
-    # z_score
-    img = tf_ops.z_score(img)
+    if not opt.uke_dataset:
+        # z_score
+        img = tf_ops.z_score(img)
 
     target_shape = tf.convert_to_tensor([opt.depth, opt.height, opt.width], dtype=tf.int32)
     # Only resize height and width. Keep depth unchanged.
@@ -243,7 +254,7 @@ def data_processing(img, lab, *pts, opt=None, logger=None, mode=None):
     if mode == "train":
         if opt.flip > 0:
             img, lab = tf_ops.random_flip(img, lab, flip=opt.flip)
-        if opt.rotate > 0:
+        if opt.rotate > 0 and not opt.uke_dataset:
             # Only rotate height and width. Keep depth unchanged.
             lab = tf.expand_dims(lab, axis=-1)
             img, lab = tf_ops.random_rotate(img, lab, rotate_scale=opt.rotate)
@@ -283,6 +294,8 @@ def volume_crop(volume, center, shape, extend_z=(0, 0)):
     return img, slices
 
 
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
 def gen_batch(opt, data_list, mode, sampler):
     """ Batch sampler
 
@@ -310,7 +323,7 @@ def gen_batch(opt, data_list, mode, sampler):
             with shape [None, 3], np.float32
     """
     train = mode == "train"
-    data = load_data()
+    data = load_data(opt=opt)
     data_list = data_list[[True if pid in data else False for pid in data_list.pid]]
     # dataset containing nf (remove benign scans)
     data_list['nf'] = [True if len(data[pid]['lab_rng']) > 1 else False for pid in data_list.pid]
@@ -356,8 +369,10 @@ def gen_batch(opt, data_list, mode, sampler):
             yield yield_list
 
 
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
 def get_loader_train(opt, logger, data_list, set_key):
-    load_data(logger)     # load data to cache
+    load_data(logger, opt=opt)     # load data to cache
     bs = opt.bs
 
     def train_gen():
@@ -408,6 +423,8 @@ def get_loader_train(opt, logger, data_list, set_key):
     return dataset, input_shape
 
 
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
 def eval_gen(opt, data_fn, data_list):
     for i, (_, sample) in enumerate(data_list.iterrows(), start=1):
         if 0 <= opt.test_n < i:
@@ -422,17 +439,22 @@ def eval_gen(opt, data_fn, data_list):
         if resized_volume.shape[0] % 2 != 0:
             resized_volume = np.pad(
                 resized_volume, ((0, 1), (0, 0), (0, 0)), mode="constant", constant_values=0)
-        normed_volume = np_ops.z_score(resized_volume)
+        if not opt.uke_dataset:
+            normed_volume = np_ops.z_score(resized_volume)
+        else:
+            normed_volume = resized_volume
         yield sample, meta, normed_volume, label
 
 
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
 def get_loader_eval(opt, logger, data_list):
-    data = load_data(logger)
+    data = load_data(logger, opt=opt)
     data_list = data_list[[True if item.pid in data and item.remove != 1 else False
                           for _, item in data_list.iterrows()]].copy()
     data_list['nf'] = [True if len(data[pid]['lab_rng']) > 1 else False for pid in data_list.pid]
     data_list = data_list[data_list.nf]
-    data = nf_kits.slim_labels(data, logger)
+    data = nf_kits.slim_labels(data, logger, opt)
 
     def data_fn(pid):
         return data[pid]["img"].astype(np.float32), data[pid]["slim"], data[pid]["meta"]
@@ -446,18 +468,28 @@ def get_loader_eval(opt, logger, data_list):
     return generator, input_shape
 
 
+# This function was modified during adaptation of DINs
+# for finetuning / training on Neurofibroma_UKE dataset
 def get_loader_test(opt, logger, data_list):
-    data = nf_kits.load_test_data_paths()    # Only contain data paths
+    if not opt.uke_dataset:
+        data = nf_kits.load_test_data_paths()    # Only contain data paths
+    else:
+        data = nf_kits.load_test_data_paths_uke_nf(opt)
 
     data_list = data_list[[True if item.pid in data and item.remove != 1 else False
                            for _, item in data_list.iterrows()]].copy()
 
     def data_fn(pid):
-        volume = nf_kits.read_nii(data[pid]["img_path"])[1].astype(np.float32)
-        meta, label = nf_kits.read_nii(data[pid]["lab_path"], int)
-        label = np.clip(label, 0, 1)
-        if volume.min() < 0:
-            volume[volume < 0] = 0
+        if not opt.uke_dataset:
+            volume = nf_kits.read_nii(data[pid]["img_path"])[1].astype(np.float32)
+            meta, label = nf_kits.read_nii(data[pid]["lab_path"], int)
+            label = np.clip(label, 0, 1)
+            if volume.min() < 0:
+                volume[volume < 0] = 0
+        else:
+            volume = nf_kits.read_nii_uke_nf(data[pid]["img_path"])[1].astype(np.float32)
+            meta, label = nf_kits.read_nii(data[pid]["lab_path"], int)
+            label = np.clip(label, 0, 1)
         return volume, label, meta
 
     generator = eval_gen(opt, data_fn, data_list)
@@ -528,7 +560,10 @@ def eval_gen_with_box(opt, data_fn, data_list, box_ds):
 
 def get_loader_test_with_box(opt, logger, data_list):
     _ = logger
-    data = nf_kits.load_test_data_paths()   # Only contain data paths
+    if not opt.uke_dataset:
+        data = nf_kits.load_test_data_paths()   # Only contain data paths
+    else:
+        data = nf_kits.load_test_data_paths_nf_uke(opt)
     box_ds = pd.read_csv(opt.bbox_path)
     box_pids = list(box_ds["pid"])
     data_list = data_list[[True if item.pid in data and item.pid in box_pids and item.remove != 1
