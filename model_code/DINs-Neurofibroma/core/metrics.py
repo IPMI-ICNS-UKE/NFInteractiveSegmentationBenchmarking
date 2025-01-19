@@ -255,8 +255,8 @@ def metric_3d(logits3d, labels3d, metrics_eval=None, **kwargs):
     assert logits3d.shape == labels3d.shape, ("Shape mismatch of logits3D and labels3D. \n"
                                               "Logits3D has shape %r while labels3D has "
                                               "shape %r" % (logits3d.shape, labels3d.shape))
-    logits3d = logits3d.astype(np.bool)
-    labels3d = labels3d.astype(np.bool)
+    logits3d = logits3d.astype(bool)
+    labels3d = labels3d.astype(bool)
 
     metrics_3d = {}
     sampling = kwargs.get("sampling", [1., 1., 1.])

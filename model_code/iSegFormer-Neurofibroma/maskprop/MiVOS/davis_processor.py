@@ -54,10 +54,10 @@ class DAVISProcessor:
         mask = torch.zeros((self.k, 1, self.nh, self.nw), dtype=torch.float32, device=self.device)
         for ki in range(1, self.k+1):
             p_srb = (scr_mask==ki).astype(np.uint8)
-            p_srb = cv2.dilate(p_srb, kernel).astype(np.bool)
+            p_srb = cv2.dilate(p_srb, kernel).astype(bool)
 
             n_srb = ((scr_mask!=ki) * (scr_mask!=-1)).astype(np.uint8)
-            n_srb = cv2.dilate(n_srb, kernel).astype(np.bool)
+            n_srb = cv2.dilate(n_srb, kernel).astype(bool)
 
             Rs = torch.from_numpy(np.stack([p_srb, n_srb], 0)).unsqueeze(0).float().to(self.device)
             Rs, _ = pad_divide_by(Rs, 16, Rs.shape[-2:])

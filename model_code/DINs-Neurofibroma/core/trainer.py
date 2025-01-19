@@ -19,7 +19,7 @@ import numpy as np
 import tensorflow as tf
 from pathlib import Path
 import scipy.ndimage as ndi
-from skimage.morphology import skeletonize, skeletonize_3d
+from skimage.morphology import skeletonize
 from tensorflow.keras.losses import SparseCategoricalCrossentropy
 
 from core.metrics import get_metric_fns, MetricGroups, metric_3d, ConfusionMatrix
@@ -184,8 +184,8 @@ def inter_simulation_test(pred, ref, ndim=2, memory=None):
     pos: list, a list of two values (y, x) / (z, y, x)
     fg: 0 for positive guide, 1 for negative
     """
-    pred = np.asarray(pred, np.bool)
-    ref = np.asarray(ref, np.bool)
+    pred = np.asarray(pred, bool)
+    ref = np.asarray(ref, bool)
     sym_diff = pred ^ ref
     struct = ndi.generate_binary_structure(ndim, 1)
     res, n_obj = ndi.label(sym_diff, struct)
@@ -204,7 +204,7 @@ def inter_simulation_test(pred, ref, ndim=2, memory=None):
         else:
             if not sym_diff[pt[0], pt[1], pt[2]]:
                 try:
-                    ske = np.stack(np.where(skeletonize_3d(sym_diff)), axis=1)
+                    ske = np.stack(np.where(skeletonize(sym_diff)), axis=1)
                     min_i = np.argmin(np.sum((ske - pt) ** 2, axis=1))
                     pt = ske[min_i]
                 except ValueError:
@@ -606,7 +606,7 @@ class Evaluator3D(object):
                                volume.shape[1] / label.shape[1],
                                volume.shape[2] / label.shape[2],
                                1], np.float32)
-        label_bool = np.asarray(label, np.bool)
+        label_bool = np.asarray(label, bool)
         if label.shape[0] < volume.shape[0]:
             label_bool = np.pad(label, ((0, volume.shape[0] - label.shape[0]), (0, 0), (0, 0)),
                                 mode="constant", constant_values=0)
@@ -727,7 +727,7 @@ class Evaluator3DWithBox(Evaluator3D):
                                volume.shape[1] / label.shape[1],
                                volume.shape[2] / label.shape[2],
                                1], np.float32)
-        label_bool = np.asarray(label, np.bool)
+        label_bool = np.asarray(label, bool)
         if label.shape[0] < volume.shape[0]:
             label_bool = np.pad(label, ((0, volume.shape[0] - label.shape[0]), (0, 0), (0, 0)),
                                 mode="constant", constant_values=0)
