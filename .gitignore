@@ -177,3 +177,4 @@ data/processed/*
 *.pth
 experiments/*
 launchers/log
+best_ckpt/
