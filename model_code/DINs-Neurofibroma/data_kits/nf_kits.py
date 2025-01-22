@@ -232,7 +232,7 @@ def read_nii_uke_nf(file_name, spacing=(1.7, 1.7, 7.8), special=False, only_head
     # Resample to desired spacing
     image = resample_image(image, spacing)
     
-    if is_label:
+    if not is_label:
         # Apply Z-score normalization
         image = z_score_normalization(image)
 
