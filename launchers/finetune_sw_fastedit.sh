@@ -2,7 +2,7 @@
 # Fine-tune the SW-FastEdit model from AutoPET-checkpoint.
 # Fine-tuning start from the epoch 580 of the checkpoint
 # and lasts for 60 epochs until the total number of epochs 640.
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=4
 
 python /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/model_code/SW-FastEdit-Neurofibroma/src/train.py \
 --input_dir /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/data/raw \
