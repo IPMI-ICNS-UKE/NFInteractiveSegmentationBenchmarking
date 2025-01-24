@@ -3,6 +3,7 @@ import logging
 import os
 import torch
 from typing import Iterable
+import onnxruntime as ort
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
@@ -29,9 +30,14 @@ def get_network(args, device):
         network.load_state_dict(
             torch.load(model_path, map_location=device, weights_only=True)["net"]
         )
+        network.to(device)
         
     elif args.network_type == "DINs":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.netwrok_type}")
+        # The original DINs model was trained with and Tensorflow 2.8 version.
+        # For re-usability the DINs model was exported as ONNX 
+        # and launched as an ONNX runtime
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        network = ort.InferenceSession(model_path, providers=providers)
     elif args.network_type == "SimpleClick":
         raise NotImplementedError(f"Network type is not implemented yet: {args.netwrok_type}")
     elif args.network_type == "SAM2":

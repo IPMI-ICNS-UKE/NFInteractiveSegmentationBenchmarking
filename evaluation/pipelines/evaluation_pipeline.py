@@ -48,7 +48,7 @@ def run_pipeline(args):
     
     data_loader = get_evaluation_data_loader(args, pre_transforms)
     
-    network = get_network(args, device).to(device)
+    network = get_network(args, device)
     inferer = get_inferer(args, device, network)
     
     metrics = {

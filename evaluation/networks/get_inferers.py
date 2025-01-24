@@ -6,10 +6,11 @@ from functools import reduce
 from pickle import dump
 from typing import Iterable, List
 import sys
-from monai.inferers import SlidingWindowInferer
+from monai.inferers import SlidingWindowInferer, SimpleInferer
 import torch
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any
+from monai.data import MetaTensor
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
@@ -21,9 +22,9 @@ SW_OVERLAP_FOR_SW_FASTEDIT = 0.25
 def get_inferer(args, device, network=None):
     inferer = None
     if args.network_type == "SW-FastEdit":
-        inferer = get_sw_fastedit(args, device)
+        inferer = get_sw_fastedit_inferer(args, device)
     elif args.network_type == "DINs":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.netwrok_type}")
+        inferer = DINsInferer()
     elif args.network_type == "SimpleClick":
         raise NotImplementedError(f"Network type is not implemented yet: {args.netwrok_type}")
     elif args.netwok_type == "SAM2":
@@ -32,23 +33,10 @@ def get_inferer(args, device, network=None):
         raise ValueError(f"Unsupported network type: {args.netwrok_type}")    
     return inferer
 
-def get_sw_fastedit(args, device, cache_roi_weight_map=True):
+def get_sw_fastedit_inferer(args, device, cache_roi_weight_map=True):
     roi_size = ROI_SIZE_FOR_SW_FASTEDIT
-    default_sw_batch_size = SW_BATCH_SIZE_FOR_SW_FASTEDIT
     sw_overlap = SW_OVERLAP_FOR_SW_FASTEDIT
-    
-    average_sample_shape = (300, 300, 400)
     batch_size = args.sw_batch_size
-    # batch_size = max(
-    #     1,
-    #     min(
-    #         reduce(
-    #             lambda x, y: x * y,
-    #             [round(average_sample_shape[i] / roi_size[i]) for i in range(len(roi_size))],
-    #             ),
-    #         default_sw_batch_size,
-    #         ),
-    #     )
     logger.info(f"{batch_size=}")
     
     sw_params = {
@@ -99,3 +87,30 @@ class SW_FastEditInferer(SlidingWindowInferer):
             buffer_dim=buffer_dim,
             **kwargs
         )
+
+class DINsInferer(SimpleInferer):
+    def __call__(
+        self, inputs: torch.Tensor, network: Callable[..., torch.Tensor], *args: Any, **kwargs: Any
+    ) -> torch.Tensor:
+        """
+        ToDo: Add documentation
+        """
+        input_tensor = inputs["image"]  # Extracting only the image data
+        meta = input_tensor.meta
+        
+        input_tensor_onnx = input_tensor.permute(0, 4, 3, 2, 1)
+        image_tensor_onnx = input_tensor_onnx[..., :1].numpy()
+        guide_tensor_onnx = input_tensor_onnx[..., 1:].numpy()
+        
+        inputs_onnx = {
+            "image": image_tensor_onnx,
+            "guide": guide_tensor_onnx
+            }
+        # Output shape: (1, 32, 960, 320, 2)
+        outputs_onnx = network.run(None, inputs_onnx)[0]
+        
+        # Transform the network prediction back to tensor
+        outputs_tensor = torch.from_numpy(outputs_onnx)
+        outputs_tensor = outputs_tensor.permute(0, 4, 3, 2, 1).to(dtype=torch.float32)
+        outputs = MetaTensor(outputs_tensor, meta=meta) 
+        return outputs
