@@ -28,6 +28,7 @@ from monai.handlers import (
     ValidationHandler,
     from_engine,
 )
+import numpy as np
 
 
 logger = logging.getLogger("evaluation_pipeline_logger")
@@ -94,6 +95,10 @@ def run_pipeline(args):
 
 def main():
     global logger
+    torch.manual_seed(42)
+    np.random.seed(42)
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
     
     args = parse_args()
     setup_loggers(logging.INFO, args.log_dir)

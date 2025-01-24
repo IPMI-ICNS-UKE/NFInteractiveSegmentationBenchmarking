@@ -30,6 +30,7 @@ def get_random_choice_from_tensor(
     size=1,
 ) -> Tuple[List[int], int] | None:
     device = t.device
+    cp.random.seed(42)
     
     with cp.cuda.Device(device.index):
         if not isinstance(t, cp.ndarray):
