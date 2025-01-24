@@ -186,8 +186,13 @@ class Interaction:
                 # Add dice_local to the dictionary
                 dsc_instance_dict[instance_id] = dsc_local
                 
-                # Insert the local prediction to global prediction
-                prediction_global = torch.max(prediction_global, batchdata["pred_local"])
+                # Insert the local prediction to global prediction, if the evaluation was done lesion-wise
+                if self.args.evaluation_mode != "global_corrective":
+                    prediction_global = torch.max(prediction_global, batchdata["pred_local"])
+            
+            # If the evaluation was done globally, consider the last local interaction result as global
+            if self.args.evaluation_mode == "global_corrective":
+                prediction_global = batchdata["pred_local"]
                 
             # Get global DSC and append it
             dsc_global_current = compute_dice(

@@ -78,9 +78,9 @@ def get_pre_transforms(args, device="cpu", input_keys=("image", "label", "connec
         LoadImaged(keys=input_keys, reader="ITKReader", image_only=False),
         EnsureChannelFirstd(keys=input_keys),
         NormalizeLabelsInDatasetd(keys=["label", "connected_component_label"], label_names=args.labels),
-        KeepLargestConnectedComponentd(keys="connected_component_label", num_components=args.num_lesions) if args.num_lesions is not None
+        KeepLargestConnectedComponentd(keys="connected_component_label", num_components=args.num_lesions) if args.evaluation_mode != "global_corrective"
         else Identityd(keys="connected_component_label"),
-        ConnectedComponentAnalysisd(keys="connected_component_label") if args.num_lesions is not None
+        ConnectedComponentAnalysisd(keys="connected_component_label") if args.evaluation_mode != "global_corrective"
         else Identityd(keys="connected_component_label"),
     ]
     
