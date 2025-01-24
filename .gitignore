@@ -181,3 +181,11 @@ best_ckpt/
 sam2_logs/
 model_weights/*
 !model_weights/README.MD
+!model_weights/*.py
+model_weights_finetuned/*
+!model_weights_finetuned/README.MD
+!model_weights_finetuned/*.py
+evaluation/results/*
+!valuation/results/README.MD
+!valuation/results/*.py
+evaluation/logs
