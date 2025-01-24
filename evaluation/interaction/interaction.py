@@ -91,10 +91,13 @@ class Interaction:
         dsc_global = [0, ]
         num_interactions_total = [0, ]
         dsc_instance_dict = {}
+        max_number_lesions_achieved = False
         
         logger.info(f"Starting a new case: {case_name}")  
         while ((dsc_global[-1] < self.dsc_global_max) and 
-               (num_interactions_total[-1] < self.num_interactions_total_max)):
+               (num_interactions_total[-1] < self.num_interactions_total_max) and
+               (not max_number_lesions_achieved)
+               ):
             
             logger.info(f"> Starting global interaction, current total number of interactions: {num_interactions_total[-1]}")
             num_interactions_per_instance = 0
@@ -116,6 +119,12 @@ class Interaction:
                         del batchdata[key]
                 
                 # Get instance mask
+                # ADD HERE: If there is no instance_id lesion in the cc_label, then we skip this instance
+                if not torch.any(cc_label == instance_id):
+                    logger.info(f">> Skipping instance {instance_id} as it is not present in cc_label.")
+                    max_number_lesions_achieved = True
+                    continue
+                
                 cc_label_local = (cc_label == instance_id).int()
                 batchdata["connected_component_label_local"] = cc_label_local
                 
@@ -137,7 +146,7 @@ class Interaction:
                     num_interactions_local.append(num_interactions_local[-1] + 1)
                     
                     # Build input dictionary for the inferer
-                    logger.info(f"Lesion guidance: {batchdata['lesion'][-1]}")
+                    logger.info(f">>> Guidance: {batchdata['lesion'], batchdata['background']}")
                     inputs = {
                         "image": batchdata["image"].to(device),
                         "guidance": {key: batchdata[key] for key in self.args.labels.keys()},
@@ -229,21 +238,4 @@ class Interaction:
         
         return engine.state.output
         
-        
-                
-                    
-                
-        
-        
-        
-    # While Dice
-    # y_pred: torch.Tensor,
-    # y: torch.Tensor,
-    # include_background: bool = True,
-    # ignore_empty: bool = True,
-    # num_classes: int | None = None,'
-        
-        
-        
-        
-        
+    
