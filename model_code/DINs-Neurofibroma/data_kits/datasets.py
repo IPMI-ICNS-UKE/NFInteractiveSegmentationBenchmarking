@@ -266,7 +266,7 @@ def data_processing(img, lab, *pts, opt=None, logger=None, mode=None):
     lab = tf.image.resize(lab, (opt.height, opt.width), tf.image.ResizeMethod.NEAREST_NEIGHBOR)
     lab = tf.squeeze(lab, axis=-1)
 
-    if mode == "train":
+    if mode == "train" and not opt.uke_dataset:
         img = tf_ops.augment_gamma(img, gamma_range=(0.7, 1.5), retain_stats=True, p_per_sample=0.3)
 
     img = (img, sp_guide)

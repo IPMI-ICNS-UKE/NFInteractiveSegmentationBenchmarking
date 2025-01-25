@@ -116,8 +116,8 @@ class Opt:
             
 root_dir = "DINs_finetuned"
 input_shape = [
-    (1, None, 960, 320, 1),
-    (1, None, 960, 320, 2)
+    (None, 10, 512, 160, 1),
+    (None, 10, 512, 160, 2)
 ]
 opt_dict = {
     "init_channel": 30,
@@ -133,35 +133,42 @@ opt = Opt(opt_dict)
 # Iterate through each fold directory
 for fold in os.listdir(root_dir):
     fold_path = os.path.join(root_dir, fold)
-    bestckpt_path = os.path.join(fold_path, "bestckpt")
+    ckpt_dir = os.path.join(fold_path, "bestckpt")
 
-    if os.path.isdir(bestckpt_path):
+    if os.path.isdir(ckpt_dir):
         print(f"Processing: {fold}")
 
         # Create a dummy model instance (similar structure as the original)
         model = DINs(opt=opt, logger=None)  # Provide correct opt and logger if needed
         model.build(input_shape)
-
-        # Restore model from checkpoint
-        checkpoint = tf.train.Checkpoint(model=model)
-        ckpt_path = tf.train.latest_checkpoint(bestckpt_path)
-
+        
+        #  Find latest checkpoint
+        ckpt_path = tf.train.latest_checkpoint(ckpt_dir)
         if ckpt_path is None:
-            raise FileNotFoundError(f"No checkpoint found in {bestckpt_path}")
-
+            raise FileNotFoundError(f"No checkpoint found in {ckpt_dir}")
+        
+        # Load model weights from checkpoint
+        checkpoint = tf.train.Checkpoint(model=model)
         checkpoint.restore(ckpt_path).expect_partial()
         print(f"Successfully restored model from {ckpt_path}")
-
+        
         # Convert the loaded model to ONNX format
         input_signature = [
             tf.TensorSpec(shape=input_shape[0], dtype=tf.float32, name="image"),
             tf.TensorSpec(shape=input_shape[1], dtype=tf.float32, name="guide")
         ]
 
-        onnx_model_path = os.path.join(fold_path, f"checkpoint.onnx")
-        tf2onnx.convert.from_keras(
-            model,
-            input_signature=input_signature,
+        @tf.function(input_signature=[input_signature])
+        def model_inference(input_data):
+            return model(input_data, training=False)
+
+
+        onnx_model_path = os.path.join(fold_path, "checkpoint.onnx")
+
+        model_proto, external_tensor_storage = tf2onnx.convert.from_function(
+            model_inference,
+            input_signature=[input_signature],
+            opset=13,  # Use an appropriate ONNX opset version
             output_path=onnx_model_path
         )
 

@@ -62,8 +62,7 @@ logger = logging.getLogger("evaluation_pipeline_logger")
 
 
 SPACING_FOR_DINS = (1.7, 1.7, 7.8)
-ORIENTATION_FOR_DINS = ("RSA")
-TARGET_SIZE_FOR_DINS = (960, 320, -1)
+ORIENTATION_FOR_DINS = ("SRA")
 SPACING_FOR_SW_FASTEDIT = (0.625, 0.625, 7.8)
 ORIENTATION_FOR_SW_FASTEDIT = ("RSA")
 SPACING_FOR_SIMPLECLICK = (-1, -1, -1)
@@ -100,22 +99,19 @@ def get_pre_transforms(args, device="cpu", input_keys=("image", "label", "connec
             ]
         )
         
-    elif args.netwrok_type == "DINs":
+    elif args.network_type == "DINs":
         spacing = SPACING_FOR_DINS
         orientation = ORIENTATION_FOR_DINS
-        target_size = TARGET_SIZE_FOR_DINS
         transforms.extend(
             [
                 Orientationd(keys=input_keys, axcodes=orientation),
                 Spacingd(keys='image', pixdim=spacing),
                 Spacingd(keys=['label', 'connected_component_label'], pixdim=spacing, mode="nearest"),
                 NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-                Resized(keys='image', spatial_size=target_size, mode="area"),
-                Resized(keys=['label', 'connected_component_label'], spatial_size=target_size, mode="nearest"),
             ]
         )
         
-    elif args.netwrok_type == "SimpleClick":
+    elif args.network_type == "SimpleClick":
         spacing = SPACING_FOR_SIMPLECLICK
         orientation = ORIENTATION_FOR_SIMPLECLICK
         transforms.extend(
@@ -125,7 +121,7 @@ def get_pre_transforms(args, device="cpu", input_keys=("image", "label", "connec
             ]
         )
         
-    elif args.netwrok_type == "SAM2":
+    elif args.network_type == "SAM2":
         spacing = SPACING_FOR_SAM2
         orientation = ORIENTATION_FOR_SAM2
         transforms.extend(
@@ -136,7 +132,7 @@ def get_pre_transforms(args, device="cpu", input_keys=("image", "label", "connec
         )
         
     else:
-        raise ValueError(f"Unsupported network type: {args.netwrok_type}")    
+        raise ValueError(f"Unsupported network type: {args.network_type}")    
     
     return Compose(transforms)
 
@@ -166,7 +162,7 @@ def get_interaction_post_transforms(args, device="cpu"):
         transforms = [
             Activationsd(keys="pred_local", softmax=True),
             AsDiscreted(keys="pred_local", argmax=True),
-            EnsureTyped(keys="pred_local", device=device)
+            EnsureTyped(keys="pred_local", device=device),
         ]
     elif ((args.network_type == "SimpleClick") or 
           (args.network_type == "SAM2")):
@@ -175,7 +171,7 @@ def get_interaction_post_transforms(args, device="cpu"):
             EnsureTyped(keys="pred_local", device=device)
         ]
     else:
-        raise ValueError(f"Unsupported network type: {args.netwrok_type}") 
+        raise ValueError(f"Unsupported network type: {args.network_type}") 
         
     return Compose(transforms)
 

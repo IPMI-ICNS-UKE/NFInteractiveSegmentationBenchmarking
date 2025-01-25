@@ -15,27 +15,28 @@ from monai.data import MetaTensor
 logger = logging.getLogger("evaluation_pipeline_logger")
 
 ROI_SIZE_FOR_SW_FASTEDIT = (128, 128, 64)
-SW_BATCH_SIZE_FOR_SW_FASTEDIT = 1
 SW_OVERLAP_FOR_SW_FASTEDIT = 0.25
+ROI_SIZE_FOR_DINS = (512, 160, 10)
+SW_OVERLAP_FOR_DINS = 0.25
 
 
 def get_inferer(args, device, network=None):
     inferer = None
     if args.network_type == "SW-FastEdit":
-        inferer = get_sw_fastedit_inferer(args, device)
+        inferer = configure_sliding_window_inferer(
+            args, device, ROI_SIZE_FOR_SW_FASTEDIT, SW_OVERLAP_FOR_SW_FASTEDIT)
     elif args.network_type == "DINs":
-        inferer = DINsInferer()
+        inferer = configure_sliding_window_inferer(
+            args, device, ROI_SIZE_FOR_DINS, SW_OVERLAP_FOR_DINS)
     elif args.network_type == "SimpleClick":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.netwrok_type}")
+        raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
     elif args.netwok_type == "SAM2":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.netwrok_type}")
+        raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
     else:
-        raise ValueError(f"Unsupported network type: {args.netwrok_type}")    
+        raise ValueError(f"Unsupported network type: {args.network_type}")    
     return inferer
 
-def get_sw_fastedit_inferer(args, device, cache_roi_weight_map=True):
-    roi_size = ROI_SIZE_FOR_SW_FASTEDIT
-    sw_overlap = SW_OVERLAP_FOR_SW_FASTEDIT
+def configure_sliding_window_inferer(args, device, roi_size, sw_overlap, cache_roi_weight_map=True):
     batch_size = args.sw_batch_size
     logger.info(f"{batch_size=}")
     
@@ -44,12 +45,11 @@ def get_sw_fastedit_inferer(args, device, cache_roi_weight_map=True):
         "mode": "gaussian",
         "cache_roi_weight_map": cache_roi_weight_map,
         }
-
-    inferer = SW_FastEditInferer(sw_batch_size=batch_size, overlap=sw_overlap, sw_device=device, **sw_params)
+    inferer = ConvBasedModelInferer(sw_batch_size=batch_size, overlap=sw_overlap, sw_device=device, **sw_params)
     return inferer
 
 
-class SW_FastEditInferer(SlidingWindowInferer):
+class ConvBasedModelInferer(SlidingWindowInferer):
     def __call__(
         self,
         inputs: dict[str, torch.Tensor],
@@ -87,30 +87,3 @@ class SW_FastEditInferer(SlidingWindowInferer):
             buffer_dim=buffer_dim,
             **kwargs
         )
-
-class DINsInferer(SimpleInferer):
-    def __call__(
-        self, inputs: torch.Tensor, network: Callable[..., torch.Tensor], *args: Any, **kwargs: Any
-    ) -> torch.Tensor:
-        """
-        ToDo: Add documentation
-        """
-        input_tensor = inputs["image"]  # Extracting only the image data
-        meta = input_tensor.meta
-        
-        input_tensor_onnx = input_tensor.permute(0, 4, 3, 2, 1)
-        image_tensor_onnx = input_tensor_onnx[..., :1].numpy()
-        guide_tensor_onnx = input_tensor_onnx[..., 1:].numpy()
-        
-        inputs_onnx = {
-            "image": image_tensor_onnx,
-            "guide": guide_tensor_onnx
-            }
-        # Output shape: (1, 32, 960, 320, 2)
-        outputs_onnx = network.run(None, inputs_onnx)[0]
-        
-        # Transform the network prediction back to tensor
-        outputs_tensor = torch.from_numpy(outputs_onnx)
-        outputs_tensor = outputs_tensor.permute(0, 4, 3, 2, 1).to(dtype=torch.float32)
-        outputs = MetaTensor(outputs_tensor, meta=meta) 
-        return outputs

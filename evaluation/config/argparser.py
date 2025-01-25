@@ -58,10 +58,20 @@ def parse_args():
     # Derived arguments based on network type
     args.model_dir = os.path.join(args.model_weights_dir, args.network_type, f"fold_{args.fold}")
     
+    
     if args.network_type == "SW-FastEdit":
         args.checkpoint_name = "checkpoint.pt"
         args.sw_batch_size = 4
         args.patch_size_discrepancy = (512, 512, 16)
+        args.is_onnx_based = False
+    elif args.network_type == "DINs":
+        args.checkpoint_name = "checkpoint.onnx"
+        args.is_onnx_based = True
+        args.patch_size_discrepancy = (256, 128, 10)
+        args.sw_batch_size = 4
+        args.no_disks = True
+        args.sigma=(5.0, 5.0, 1.0)
+        
     
     # Default labels
     args.labels = {"lesion": 1, "background": 0}

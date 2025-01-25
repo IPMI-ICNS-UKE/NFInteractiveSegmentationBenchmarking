@@ -189,7 +189,7 @@ def reorient_to_rsa(image):
     return ras_image
 
 # Function to resample an image to the desired spacing
-def resample_image(image, spacing):
+def resample_image(image, spacing, is_label=False):
     original_spacing = image.GetSpacing()
     original_size = image.GetSize()
 
@@ -202,7 +202,10 @@ def resample_image(image, spacing):
     resampler = sitk.ResampleImageFilter()
     resampler.SetOutputSpacing(spacing)
     resampler.SetSize(new_size)
-    resampler.SetInterpolator(sitk.sitkLinear)
+    if is_label:
+        resampler.SetInterpolator(sitk.sitkNearestNeighbor)  # For label masks
+    else:
+        resampler.SetInterpolator(sitk.sitkLinear)  # For intensity images
     resampler.SetOutputOrigin(image.GetOrigin())
     resampler.SetOutputDirection(image.GetDirection())
     return resampler.Execute(image)
@@ -230,7 +233,7 @@ def read_nii_uke_nf(file_name, spacing=(1.7, 1.7, 7.8), special=False, only_head
     image = reorient_to_rsa(image)
 
     # Resample to desired spacing
-    image = resample_image(image, spacing)
+    image = resample_image(image, spacing, is_label)
     
     if not is_label:
         # Apply Z-score normalization

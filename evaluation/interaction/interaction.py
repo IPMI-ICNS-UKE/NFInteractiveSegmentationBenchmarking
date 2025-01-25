@@ -155,7 +155,8 @@ class Interaction:
                     
                     # Perform inference and get the local prediction
                     engine.fire_event(IterationEvents.INNER_ITERATION_STARTED)
-                    engine.network.eval() # ToDo: May cause issues in case of SimpleClick
+                    if not self.args.is_onnx_based:
+                        engine.network.eval() # ToDo: May cause issues in case of SimpleClick
                     
                     # Forward Pass
                     with torch.no_grad():
