@@ -188,4 +188,4 @@ model_weights_finetuned/*
 evaluation/results/*
 !valuation/results/README.MD
 !valuation/results/*.py
-evaluation/logs
+log.txt
