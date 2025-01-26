@@ -2,13 +2,11 @@ from monai.networks.nets.dynunet import DynUNet
 import logging
 import os
 import torch
-from typing import Iterable
-import onnxruntime as ort
-import torch.nn as nn
-from monai.data import MetaTensor
-import numpy as np
+
+from evaluation.networks.custom_networks import DINsNetwork, SAM2Network
 
 logger = logging.getLogger("evaluation_pipeline_logger")
+
 
 def get_network(args, device):
     model_path = os.path.join(args.model_dir, args.checkpoint_name)
@@ -45,36 +43,15 @@ def get_network(args, device):
     elif args.network_type == "SimpleClick":
         raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
     elif args.network_type == "SAM2":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
+        config_path = os.path.join(args.model_dir, args.config_name)
+        network = SAM2Network(model_path=model_path,
+                              config_path=config_path,
+                              cache_path=args.cache_dir,
+                              device=device
+                              )
     else:
         raise ValueError(f"Unsupported network: {args.network_type}")
 
     logger.info(f"Selected network: {args.network_type}")
 
     return network
-
-
-class DINsNetwork(nn.Module):
-    def __init__(self, model_path, providers, device):
-        super().__init__()
-        self.network = ort.InferenceSession(
-            model_path, 
-            providers=providers
-            )
-        self.device = device
-    
-    def forward(self, x):                
-        input_tensor_onnx = x.permute(0, 4, 2, 3, 1)
-        image_tensor_onnx = input_tensor_onnx[..., :1].cpu().numpy()
-        guide_tensor_onnx = input_tensor_onnx[..., 1:].cpu().numpy()
-        input_onnx = {
-            "image": image_tensor_onnx,
-            "guide": guide_tensor_onnx
-            }
-        
-        output_onnx = self.network.run(None, input_onnx)[0]
-        # Logits with shape (1, 10, 512, 160, 2)
-        output_tensor = torch.from_numpy(output_onnx)
-        output_tensor = output_tensor.permute(0, 4, 2, 3, 1).to(dtype=torch.float32)
-        return output_tensor.to(self.device)
-    

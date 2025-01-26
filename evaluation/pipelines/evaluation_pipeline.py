@@ -18,27 +18,19 @@ from monai.engines import SupervisedEvaluator
 from evaluation.transforms.custom_transforms import ClickGenerationStrategy
 from evaluation.utils.logger import get_logger, setup_loggers
 
-
 from monai.handlers import (
-    CheckpointSaver,
-    LrScheduleHandler,
     MeanDice,
     StatsHandler,
-    TensorBoardStatsHandler,
-    ValidationHandler,
     from_engine,
 )
 import numpy as np
 
-
 logger = logging.getLogger("evaluation_pipeline_logger")
-
 
 
 def run_pipeline(args):
     for arg in vars(args):
         logger.info("USING:: {} = {}".format(arg, getattr(args, arg)))
-    print("")
     device = torch.device("cuda" if args.use_gpu else "cpu")
     
     pre_transforms = get_pre_transforms(args)
@@ -97,14 +89,11 @@ def main():
     global logger
     torch.manual_seed(42)
     np.random.seed(42)
-    torch.use_deterministic_algorithms(True)
-    torch.backends.cudnn.deterministic = True
     
     args = parse_args()
     setup_loggers(logging.INFO, args.log_dir)
     logger = get_logger()
 
-    
     run_pipeline(args)
 
 if __name__ == "__main__":

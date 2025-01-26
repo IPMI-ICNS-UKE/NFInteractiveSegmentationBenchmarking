@@ -1,16 +1,8 @@
 import logging
-import os
-import random
-from collections import OrderedDict
-from functools import reduce
-from pickle import dump
-from typing import Iterable, List
-import sys
 from monai.inferers import SlidingWindowInferer, SimpleInferer
 import torch
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
-from monai.data import MetaTensor
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
@@ -30,8 +22,8 @@ def get_inferer(args, device, network=None):
             args, device, ROI_SIZE_FOR_DINS, SW_OVERLAP_FOR_DINS)
     elif args.network_type == "SimpleClick":
         raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
-    elif args.netwok_type == "SAM2":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
+    elif args.network_type == "SAM2":
+        inferer = SimpleInferer()
     else:
         raise ValueError(f"Unsupported network type: {args.network_type}")    
     return inferer
@@ -45,11 +37,11 @@ def configure_sliding_window_inferer(args, device, roi_size, sw_overlap, cache_r
         "mode": "gaussian",
         "cache_roi_weight_map": cache_roi_weight_map,
         }
-    inferer = ConvBasedModelInferer(sw_batch_size=batch_size, overlap=sw_overlap, sw_device=device, **sw_params)
+    inferer = Conv3DBasedModelInferer(sw_batch_size=batch_size, overlap=sw_overlap, sw_device=device, **sw_params)
     return inferer
 
 
-class ConvBasedModelInferer(SlidingWindowInferer):
+class Conv3DBasedModelInferer(SlidingWindowInferer):
     def __call__(
         self,
         inputs: dict[str, torch.Tensor],

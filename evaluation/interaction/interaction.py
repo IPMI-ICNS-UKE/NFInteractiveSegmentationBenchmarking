@@ -1,24 +1,18 @@
 import logging
-import time
 import os
 from typing import Callable, Dict, Sequence, Union
 
-import nibabel as nib
 import numpy as np
 import pandas as pd
 import torch
 from monai.data import decollate_batch, list_data_collate
 from monai.engines import SupervisedEvaluator, SupervisedTrainer
 from monai.engines.utils import IterationEvents
-from monai.losses import DiceLoss
-from monai.transforms import Compose
 from monai.utils.enums import CommonKeys
 from monai.utils.enums import CommonKeys as Keys
-
 from monai.metrics import compute_dice
 
 from evaluation.transforms.custom_transforms import ClickGenerationStrategy
-
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
@@ -68,7 +62,6 @@ class Interaction:
         self.dsc_local_max = dsc_local_max
         self.dsc_global_max = dsc_global_max
     
-    
     def __call__(
         self,
         engine: Union[SupervisedTrainer, SupervisedEvaluator],
@@ -86,9 +79,11 @@ class Interaction:
                 
         # Create a global prediction placeholder
         prediction_global = torch.zeros_like(cc_label)
+        prediction_global_after_single_interaction = torch.zeros_like(cc_label)
         
         # Initialize global counters
         dsc_global = [0, ]
+        dsc_global_after_single_interaction = [0, ]
         num_interactions_total = [0, ]
         dsc_instance_dict = {}
         max_number_lesions_achieved = False
@@ -104,7 +99,8 @@ class Interaction:
             
             # Perform operation per instance, instance_id == 0 stands for background.
             # In case of a semantic mask there is a single instance representing all lesions.
-            for instance_id in range(1, self.num_instances_to_correct+1):
+            for instance_id in range(1, self.num_instances_to_correct+1): # Start a new lesion
+                new_image_flag = True
                 
                 
                 logger.info(f">> Starting local interaction cycle for instance: {instance_id}")
@@ -119,7 +115,7 @@ class Interaction:
                         del batchdata[key]
                 
                 # Get instance mask
-                # ADD HERE: If there is no instance_id lesion in the cc_label, then we skip this instance
+                # If there is no instance_id lesion in the cc_label, then we skip this instance
                 if not torch.any(cc_label == instance_id):
                     logger.info(f">> Skipping instance {instance_id} as it is not present in cc_label.")
                     max_number_lesions_achieved = True
@@ -130,10 +126,11 @@ class Interaction:
                 
                 # Create a local prediction placeholder
                 prediction_local = torch.zeros_like(cc_label_local)
+                prediction_after_single_interaction = torch.zeros_like(cc_label_local)
                 batchdata["pred_local"] = prediction_local
                 
                 while ((dsc_local[-1] < self.dsc_local_max) and 
-                       (num_interactions_local[-1] < self.num_interactions_local_max)):
+                       (num_interactions_local[-1] < self.num_interactions_local_max)): # Start a new interaction
                     # Get discrepancy mask and interaction point
                     batchdata_list = decollate_batch(batchdata)
                     for i in range(len(batchdata_list)):
@@ -150,24 +147,31 @@ class Interaction:
                     inputs = {
                         "image": batchdata["image"].to(device),
                         "guidance": {key: batchdata[key] for key in self.args.labels.keys()},
-                        "previous_prediction": batchdata["pred_local"].to(device)
+                        "previous_prediction": batchdata["pred_local"].to(device),
+                        "case_name": case_name,
+                        "reset_state": new_image_flag
                     }
                     
                     # Perform inference and get the local prediction
                     engine.fire_event(IterationEvents.INNER_ITERATION_STARTED)
-                    if not self.args.is_onnx_based:
-                        engine.network.eval() # ToDo: May cause issues in case of SimpleClick
+                    if not self.args.non_standard_network:
+                        engine.network.eval()
                     
                     # Forward Pass
                     with torch.no_grad():
                         prediction_local = engine.inferer(inputs, engine.network)
                     batchdata["pred_local"] = prediction_local
+                    new_image_flag = False
                     
                     # Apply post-processing for the local prediction
                     batchdata_list = decollate_batch(batchdata)
                     for i in range(len(batchdata_list)):
                         batchdata_list[i] = self.post_transforms(batchdata_list[i])
                     batchdata = list_data_collate(batchdata_list)
+                    
+                    # Save the prediction after a single interaction
+                    if num_interactions_local[-1] == 1:
+                        prediction_after_single_interaction = batchdata["pred_local"].detach().clone()
                     
                     # Calculate local DSC
                     dsc_local_current = compute_dice(y_pred=batchdata["pred_local"],
@@ -190,18 +194,26 @@ class Interaction:
                 # Insert the local prediction to global prediction, if the evaluation was done lesion-wise
                 if self.args.evaluation_mode != "global_corrective":
                     prediction_global = torch.max(prediction_global, batchdata["pred_local"])
+                    prediction_global_after_single_interaction = torch.max(prediction_global_after_single_interaction, prediction_after_single_interaction)
             
             # If the evaluation was done globally, consider the last local interaction result as global
             if self.args.evaluation_mode == "global_corrective":
                 prediction_global = batchdata["pred_local"]
+                prediction_global_after_single_interaction = prediction_after_single_interaction
                 
             # Get global DSC and append it
+            dsc_global_current_after_single_interaction = compute_dice(
+                y_pred=prediction_global_after_single_interaction,
+                y=label,
+                include_background=self.args.include_background_in_metric
+                )
             dsc_global_current = compute_dice(
                 y_pred=prediction_global,
                 y=label,
                 include_background=self.args.include_background_in_metric
                 )
             dsc_global.append(dsc_global_current.item())
+            dsc_global_after_single_interaction.append(dsc_global_current_after_single_interaction.item())
             
             # Increase the total number of interactions accordingly
             num_interactions_total.append(num_interactions_total[-1] + num_interactions_per_instance)
@@ -226,6 +238,13 @@ class Interaction:
         )
         
         # Create pandas dataframe with dsc_global and save it to the specified location as an excel file
+        df_global_level_after_single_interaction = pd.DataFrame({"interaction_total": [0, 1], "dsc_global": dsc_global_after_single_interaction})
+        df_global_level_after_single_interaction.to_excel(
+            os.path.join(metrics_output_directory, "global_metrics_after_single_interaction.xlsx"),
+            index=False
+        )
+        
+        # Create pandas dataframe with dsc_global and save it to the specified location as an excel file
         df_global_level = pd.DataFrame({"interaction_total": num_interactions_total, "dsc_global": dsc_global})
         df_global_level.to_excel(
             os.path.join(metrics_output_directory, "global_metrics.xlsx"),
@@ -243,5 +262,4 @@ class Interaction:
         engine.fire_event(IterationEvents.MODEL_COMPLETED)
         
         return engine.state.output
-        
     

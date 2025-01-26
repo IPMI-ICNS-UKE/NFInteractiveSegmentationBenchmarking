@@ -1,49 +1,25 @@
+from monai.data.folder_layout import FolderLayout
+import logging
+import os
+import numpy as np
+
+from monai.apps.deepedit.transforms import NormalizeLabelsInDatasetd
 from monai.transforms import (
     Activationsd,
     AsDiscreted,
-    CenterSpatialCropd,
     Compose,
-    CopyItemsd,
-    CropForegroundd,
-    # DataStatsd,
     DivisiblePadd,
     EnsureChannelFirstd,
     EnsureTyped,
     Identityd,
     Invertd,
-    Lambdad,
     LoadImaged,
-    MeanEnsembled,
     Orientationd,
-    RandCropByPosNegLabeld,
-    RandFlipd,
-    RandRotate90d,
     SaveImaged,
-    ScaleIntensityRanged,
     ScaleIntensityRangePercentilesd,
-    SignalFillEmptyd,
     Spacingd,
-    ToDeviced,
-    # ToNumpyd,
-    ToTensord,
-    VoteEnsembled,
     NormalizeIntensityd,
-    Resized,
     KeepLargestConnectedComponentd,
-    ToNumpyd
-    
-)
-
-from monai.apps.deepedit.transforms import (
-
-    NormalizeLabelsInDatasetd,
-    AddGuidanceSignalDeepEditd,
-    AddRandomGuidanceDeepEditd,
-    FindDiscrepancyRegionsDeepEditd,
-    NormalizeLabelsInDatasetd,
-    FindAllValidSlicesMissingLabelsd,
-    AddInitialSeedPointMissingLabelsd,
-
 )
 
 from evaluation.transforms.custom_transforms import (
@@ -53,10 +29,7 @@ from evaluation.transforms.custom_transforms import (
     AddGuidanceSignal,
     ConnectedComponentAnalysisd
 )
-from monai.data.folder_layout import FolderLayout
-import logging
-import os
-import numpy as np
+
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
@@ -66,9 +39,9 @@ ORIENTATION_FOR_DINS = ("SRA")
 SPACING_FOR_SW_FASTEDIT = (0.625, 0.625, 7.8)
 ORIENTATION_FOR_SW_FASTEDIT = ("RSA")
 SPACING_FOR_SIMPLECLICK = (-1, -1, -1)
-ORIENTATION_FOR_SIMPLECLICK = ("RAS")
+ORIENTATION_FOR_SIMPLECLICK = ("RSA") 
 SPACING_FOR_SAM2 = (-1, -1, -1)
-ORIENTATION_FOR_SAM2 = ("RAS")
+ORIENTATION_FOR_SAM2 = ("RSA") 
 
 
 def get_pre_transforms(args, device="cpu", input_keys=("image", "label", "connected_component_label")):    
@@ -150,13 +123,7 @@ def get_interaction_pre_transforms(args, device="cpu"):
 
 def get_interaction_post_transforms(args, device="cpu"):
     # Expects "current_label" containing only a binary mask
-    
-    # What does each model return?
-    # FastEdit => Requires softmax and binarization
-    # DINs => Requires softmax and binarization
-    # SimpleClick => Should return binary mask already
-    # SAM2 => Should return binary mask already
-    
+        
     if ((args.network_type == "SW-FastEdit") or 
         (args.network_type == "DINs")):
         transforms = [
@@ -167,7 +134,6 @@ def get_interaction_post_transforms(args, device="cpu"):
     elif ((args.network_type == "SimpleClick") or 
           (args.network_type == "SAM2")):
         transforms = [
-            Identityd(keys="pred_local"),
             EnsureTyped(keys="pred_local", device=device)
         ]
     else:
