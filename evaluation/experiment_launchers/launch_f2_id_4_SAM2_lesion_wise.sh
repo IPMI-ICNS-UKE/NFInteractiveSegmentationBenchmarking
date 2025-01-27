@@ -8,7 +8,7 @@ TEST_SET_IDS=(1 2 3)
 
 
 # Please choose parameters
-FOLD=1
+FOLD=2
 NUM_INTERACTIONS_PER_LESION=3
 NUM_LESIONS=20
 
