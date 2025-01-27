@@ -189,3 +189,5 @@ evaluation/results/*
 !valuation/results/README.MD
 !valuation/results/*.py
 log.txt
+evaluation/cache/*
+!evaluation/cache/README.MD
