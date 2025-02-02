@@ -191,3 +191,5 @@ evaluation/results/*
 log.txt
 evaluation/cache/*
 !evaluation/cache/README.MD
+results/*
+!results/*.ipynb
