@@ -149,7 +149,8 @@ class Interaction:
                         "guidance": {key: batchdata[key] for key in self.args.labels.keys()},
                         "previous_prediction": batchdata["pred_local"].to(device),
                         "case_name": case_name,
-                        "reset_state": new_image_flag
+                        "reset_state": new_image_flag,
+                        "gt": batchdata["connected_component_label_local"].to(device) # For SimpleClick debugging
                     }
                     
                     # Perform inference and get the local prediction
