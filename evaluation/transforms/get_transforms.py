@@ -20,6 +20,8 @@ from monai.transforms import (
     Spacingd,
     NormalizeIntensityd,
     KeepLargestConnectedComponentd,
+    RepeatChanneld,
+    Resized
 )
 
 from evaluation.transforms.custom_transforms import (
@@ -40,6 +42,7 @@ SPACING_FOR_SW_FASTEDIT = (0.625, 0.625, 7.8)
 ORIENTATION_FOR_SW_FASTEDIT = ("RSA")
 SPACING_FOR_SIMPLECLICK = (-1, -1, -1)
 ORIENTATION_FOR_SIMPLECLICK = ("RSA") 
+TARGET_SIZE_FOR_SIMPLECLICK = (1024, 1024, -1)
 SPACING_FOR_SAM2 = (-1, -1, -1)
 ORIENTATION_FOR_SAM2 = ("RSA") 
 
@@ -87,10 +90,12 @@ def get_pre_transforms(args, device="cpu", input_keys=("image", "label", "connec
     elif args.network_type == "SimpleClick":
         spacing = SPACING_FOR_SIMPLECLICK
         orientation = ORIENTATION_FOR_SIMPLECLICK
+        target_size = TARGET_SIZE_FOR_SIMPLECLICK
         transforms.extend(
             [
                 Orientationd(keys=input_keys, axcodes=orientation),
                 ScaleIntensityRangePercentilesd(keys="image", lower=0.5, upper=99.5, b_min=0.0, b_max=255.0, clip=True),
+                Resized(keys=["image", "label", "connected_component_label"], spatial_size=target_size, mode=["area", "nearest", "nearest"]),
             ]
         )
         
