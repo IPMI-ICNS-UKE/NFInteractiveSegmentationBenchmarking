@@ -2,7 +2,7 @@
 # Train the SW-FastEdit model from scratch
 export CUDA_VISIBLE_DEVICES=1
 
-python /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/model_code/SW-FastEdit-Neurofibroma/src/train.py \
+python /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/model_code/SW_FastEdit_Neurofibroma/src/train.py \
 --input_dir /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/data/raw \
 --output_dir /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/experiments/SW_FastEdit \
 --fold_dir /home/gkolokolnikov/PhD_project/nf_segmentation_interactive/NFInteractiveSegmentationBenchmarking/data/splits \
