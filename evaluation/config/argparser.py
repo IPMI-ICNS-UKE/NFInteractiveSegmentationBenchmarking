@@ -71,6 +71,11 @@ def parse_args():
         args.sw_batch_size = 4
         args.no_disks = True
         args.sigma=(5.0, 5.0, 1.0)
+    elif args.network_type == "SimpleClick":
+        args.checkpoint_name = "checkpoint_simpleclick.pth"
+        args.checkpoint_propagator = "checkpoint_stcn.pth"
+        args.non_standard_network = True
+        args.patch_size_discrepancy = (512, 512, 16)
     elif args.network_type == "SAM2":
         args.checkpoint_name = "checkpoint.pt"
         args.config_name = "sam2.1_hiera_b+.yaml"
