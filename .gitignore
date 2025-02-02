@@ -172,7 +172,9 @@ cython_debug/
 
 # Ignore project-specific instances
 data/raw/*
+!data/raw/README.MD
 data/processed/*
+!data/processed/README.MD
 *.pt
 *.pth
 experiments/*
