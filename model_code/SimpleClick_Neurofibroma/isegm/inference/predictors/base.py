@@ -37,6 +37,9 @@ class BasePredictor(object):
 
     def set_input_image(self, image):
         image_nd = self.to_tensor(image)
+        print("-"*50,"PREDICTOR")
+        print(image_nd.shape)
+        print(image_nd.min(), image_nd.max())
         for transform in self.transforms:
             transform.reset()
         self.original_image = image_nd.to(self.device)

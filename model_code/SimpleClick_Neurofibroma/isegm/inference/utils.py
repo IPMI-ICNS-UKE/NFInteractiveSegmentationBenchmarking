@@ -24,7 +24,6 @@ def load_is_model(checkpoint, device, eval_ritm, **kwargs):
         # print("Load pre-trained checkpoint from: %s" % checkpoint)
     else:
         state_dict = checkpoint
-
     if isinstance(state_dict, list):
         model = load_single_is_model(state_dict[0], device, eval_ritm, **kwargs)
         models = [load_single_is_model(x, device, eval_ritm, **kwargs) for x in state_dict]
