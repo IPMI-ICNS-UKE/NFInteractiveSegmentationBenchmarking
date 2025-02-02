@@ -3,7 +3,6 @@ import numpy as np
 import SimpleITK as sitk
 from skimage.measure import label
 from PIL import Image
-import imageio
 from tqdm import tqdm
 
 
@@ -11,6 +10,12 @@ from tqdm import tqdm
 def reorient_to_ras(image):
     """
     Reorient the given image to RAS orientation using SimpleITK.
+    
+    Parameters:
+    image (SimpleITK.Image): The input image.
+    
+    Returns:
+    SimpleITK.Image: The reoriented image.
     """
     ras_orient_filter = sitk.DICOMOrientImageFilter()
     ras_orient_filter.SetDesiredCoordinateOrientation("RAS")
@@ -18,6 +23,16 @@ def reorient_to_ras(image):
 
 
 def preprocess_image(image_data, method="percentile"):
+    """
+    Preprocess the image using intensity normalization.
+    
+    Parameters:
+    image_data (numpy.ndarray): The input image data.
+    method (str): The normalization method ('percentile' or 'mean').
+    
+    Returns:
+    numpy.ndarray: The preprocessed image data.
+    """
     if method == "percentile":
         lower_bound, upper_bound = np.percentile(
             image_data[image_data > 0], 0.5
@@ -38,6 +53,18 @@ def preprocess_image(image_data, method="percentile"):
 
 
 def create_instance_mask(segmentation, min_size=500, remove_small=True, limit_to_255=False):
+    """
+    Generates an instance mask from a binary segmentation mask by labeling connected components.
+
+    Args:
+        segmentation (np.ndarray): Binary segmentation mask (2D or 3D).
+        min_size (int, optional): Minimum size threshold to retain components. Defaults to 500.
+        remove_small (bool, optional): If True, removes components smaller than `min_size`. Defaults to True.
+        limit_to_255 (bool, optional): If True, limits the number of components to the largest 255. Defaults to False.
+
+    Returns:
+        np.ndarray: Instance-labeled mask where each connected component has a unique ID.
+    """
     labeled_mask = label(segmentation > 0, connectivity=3)
     unique, counts = np.unique(labeled_mask, return_counts=True)
     
@@ -69,6 +96,18 @@ def create_instance_mask(segmentation, min_size=500, remove_small=True, limit_to
 
 
 def save_slices(data, output_folder, file_format, prefix):
+    """
+    Saves 2D slices from a 3D numpy array into image files.
+
+    Args:
+        data (np.ndarray): A 3D numpy array (D, H, W) representing image slices.
+        output_folder (str): The directory where slices will be saved.
+        file_format (str, optional): Image format to save ('png' or 'jpg'). Defaults to 'png'.
+        prefix (str, optional): Prefix for saved filenames. Defaults to "slice_".
+
+    Raises:
+        ValueError: If an unsupported file format is provided.
+    """
     os.makedirs(output_folder, exist_ok=True)
     for i, slice_ in enumerate(data):
         filename = os.path.join(output_folder, f"{prefix}{i:05d}.{file_format}")
@@ -76,8 +115,6 @@ def save_slices(data, output_folder, file_format, prefix):
             image = Image.fromarray(slice_.astype(np.uint8))
             image.save(filename)
         elif file_format == "png":
-            # print(np.unique(slice_))
-            # imageio.imwrite(filename, slice_)
             if np.max(slice_) > 255:
                 slice_ = slice_.astype(np.uint16)
             else:
@@ -91,6 +128,22 @@ def save_slices(data, output_folder, file_format, prefix):
 # Case-level processing
 def process_case(case_path, output_root, preprocess_method, remove_small_tumors, limit_to_255,
                  use_instance_masks, only_labels, min_tumor_size=500):
+    """
+    Processes a single case by loading, preprocessing, and saving 2D slices from 3D medical images.
+
+    Args:
+        case_path (tuple): Tuple containing paths to (image, mask).
+        output_root (str): Root directory for saving processed slices.
+        preprocess_method (str): Preprocessing method for the image.
+        remove_small_tumors (bool): If True, removes tumors smaller than `min_tumor_size`.
+        limit_to_255 (bool): If True, limits instance mask labels to a maximum of 255 components.
+        use_instance_masks (bool): If True, generates instance-wise segmentation masks.
+        only_labels (bool): If True, processes only the labels without loading images.
+        min_tumor_size (int, optional): Minimum tumor size threshold for filtering. Defaults to 500.
+
+    Raises:
+        FileNotFoundError: If the image or mask path is missing.
+    """
     image_path, mask_path = case_path
     if not only_labels:
         # Read and reorient image and mask to RAS
@@ -105,13 +158,11 @@ def process_case(case_path, output_root, preprocess_method, remove_small_tumors,
     mask_sitk = reorient_to_ras(mask_sitk)
     mask = sitk.GetArrayFromImage(mask_sitk)
 
-    
     # Generate instance mask
     if use_instance_masks:
         instance_mask = create_instance_mask(mask, min_size=min_tumor_size, remove_small=remove_small_tumors, limit_to_255=limit_to_255)
     else:
         instance_mask = mask > 0
-        # instance_mask = instance_mask.astype(np.uint8) * 255
         instance_mask = instance_mask.astype(np.uint8)
 
     # Slice along the shortest axis
@@ -124,7 +175,6 @@ def process_case(case_path, output_root, preprocess_method, remove_small_tumors,
         image_slices = np.moveaxis(preprocessed_image, axis, 0)
         image_slices = np.flip(image_slices, axis=1)
         image_slices = np.flip(image_slices, axis=2)
-    
     
     # Define folder structure
     case_name = os.path.splitext(os.path.basename(image_path))[0].split(".")[0]
@@ -149,6 +199,22 @@ def process_case(case_path, output_root, preprocess_method, remove_small_tumors,
 # Dataset-level processing
 def process_dataset(input_root, output_root, dataset_folders, preprocess_method, 
                     remove_small_tumors, limit_to_255, use_instance_mask, only_labels):
+    """
+    Processes multiple datasets by iterating through image and mask pairs.
+
+    Args:
+        input_root (str): Root directory containing dataset folders.
+        output_root (str): Directory to save processed slices.
+        dataset_folders (list): List of dataset folder names within `input_root`.
+        preprocess_method (str): Preprocessing method for images.
+        remove_small_tumors (bool): If True, removes small tumor regions.
+        limit_to_255 (bool): If True, limits the number of unique instance labels to 255.
+        use_instance_mask (bool): If True, processes masks as instance segmentation masks.
+        only_labels (bool): If True, processes only label masks without images.
+
+    Raises:
+        FileNotFoundError: If an expected dataset folder is missing.
+    """
     for dataset in dataset_folders:
         print(f"Processing dataset: {dataset}")
         image_folder = os.path.join(input_root, dataset)
@@ -159,16 +225,20 @@ def process_dataset(input_root, output_root, dataset_folders, preprocess_method,
         for image_file, mask_file in tqdm(zip(image_files, mask_files)):
             image_path = os.path.join(image_folder, image_file)
             mask_path = os.path.join(mask_folder, mask_file)
-            process_case(
-                (image_path, mask_path),
-                output_root,
-                preprocess_method,
-                remove_small_tumors,
-                limit_to_255,
-                use_instance_mask,
-                only_labels,
-            )
-
+            
+            try:
+                process_case(
+                    (image_path, mask_path),
+                    output_root,
+                    preprocess_method,
+                    remove_small_tumors,
+                    limit_to_255,
+                    use_instance_mask,
+                    only_labels,
+                )
+            except Exception as e:
+                print(f"Error processing case {image_file} / {mask_file}: {e}")
+                
 
 if __name__ == "__main__":
     # Parameters

@@ -1,6 +1,6 @@
 import os
-import random
 from sklearn.model_selection import KFold
+
 
 def create_k_fold_splits(input_path, split_path, num_folds=5):
     """
@@ -41,6 +41,7 @@ def create_k_fold_splits(input_path, split_path, num_folds=5):
         print(f"Fold {fold_idx}: Train set and validation set written to {fold_dir}")
 
     print("All folds processed.")
+
 
 if __name__ == "__main__":
     # Set paths and choose the number of folds
