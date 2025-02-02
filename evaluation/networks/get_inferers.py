@@ -21,7 +21,7 @@ def get_inferer(args, device, network=None):
         inferer = configure_sliding_window_inferer(
             args, device, ROI_SIZE_FOR_DINS, SW_OVERLAP_FOR_DINS)
     elif args.network_type == "SimpleClick":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
+        inferer = SimpleInferer()
     elif args.network_type == "SAM2":
         inferer = SimpleInferer()
     else:
