@@ -3,7 +3,7 @@ import logging
 import os
 import torch
 
-from evaluation.networks.custom_networks import DINsNetwork, SAM2Network
+from evaluation.networks.custom_networks import DINsNetwork, SAM2Network, SimpleClick3DNetwork
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
@@ -41,7 +41,12 @@ def get_network(args, device):
         network = DINsNetwork(model_path, providers, device)
         
     elif args.network_type == "SimpleClick":
-        raise NotImplementedError(f"Network type is not implemented yet: {args.network_type}")
+        logger.info("The SimpleClick model is still under development and does not work properly yet!!!")
+        stcn_propagator_path = os.path.join(args.model_dir, 
+                                            args.checkpoint_propagator)
+        network = SimpleClick3DNetwork(simpleclick_path=model_path,
+                                       stcn_path=stcn_propagator_path,
+                                       device=device)
     elif args.network_type == "SAM2":
         config_path = os.path.join(args.model_dir, args.config_name)
         network = SAM2Network(model_path=model_path,
