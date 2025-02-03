@@ -1,10 +1,10 @@
+from typing import Callable, Dict, Sequence, Union
+import pandas as pd
+import numpy as np
+import torch
 import logging
 import os
-from typing import Callable, Dict, Sequence, Union
 
-import numpy as np
-import pandas as pd
-import torch
 from monai.data import decollate_batch, list_data_collate
 from monai.engines import SupervisedEvaluator, SupervisedTrainer
 from monai.engines.utils import IterationEvents
@@ -18,15 +18,50 @@ logger = logging.getLogger("evaluation_pipeline_logger")
 
 
 def create_dataframe_from_dict(data_dict):
+    """
+    Converts a dictionary of lists into a pandas DataFrame, ensuring all lists are of equal length 
+    by padding shorter lists with NaN values.
+
+    This function is useful for handling evaluation metrics, where different keys (e.g., lesion IDs) 
+    may have varying numbers of recorded values.
+
+    Args:
+        data_dict (dict): A dictionary where keys are column names and values are lists of varying lengths.
+
+    Returns:
+        pd.DataFrame: A DataFrame where each key becomes a column, and lists are padded with NaNs 
+                      to match the longest list.
+    """
     max_length = max(len(lst) for lst in data_dict.values())
     for key, value in data_dict.items():
         data_dict[key] = value + [np.nan] * (max_length - len(value))
     return pd.DataFrame(data_dict)
 
 class Interaction:
-    '''
-    ToDO: Add documentation
-    '''
+    """
+    Implements an interactive segmentation framework where a model iteratively refines predictions 
+    through corrective user interactions.
+
+    The class supports different evaluation modes (lesion-wise or global corrective), applies 
+    pre-processing and post-processing transforms, and records detailed logs and metrics.
+
+    Attributes:
+        args (argparse.Namespace): Configuration arguments for the evaluation process.
+        pre_transforms (Union[Sequence[Callable], Callable]): Pre-processing transformations applied to input data.
+        post_transforms (Union[Sequence[Callable], Callable]): Post-processing transformations applied after inference.
+        train (bool): Indicates whether the interaction is part of training.
+        label_names (Union[None, Dict[str, int]]): Mapping of label names to numerical values.
+        deepgrow_probability (float): Probability of using DeepGrow interaction method.
+        click_probability_key (str): Key name in batch data for interaction probability.
+        click_generation_strategy_key (str): Key name for interaction strategy type.
+        click_generation_strategy (ClickGenerationStrategy): Defines the click-based interaction method.
+
+        num_instances_to_correct (int): Maximum number of lesion instances to correct.
+        num_interactions_local_max (int): Max interactions allowed per instance.
+        num_interactions_total_max (int): Max total interactions across all instances.
+        dsc_local_max (float): Target Dice Similarity Coefficient (DSC) for local corrections.
+        dsc_global_max (float): Target DSC for global corrections.
+    """
     def __init__(
         self,
         args,
@@ -44,6 +79,9 @@ class Interaction:
         deepgrow_probability: float = 1.0,
         click_generation_strategy: ClickGenerationStrategy = ClickGenerationStrategy.PATCH_BASED_CORRECTIVE,
     ):
+        """
+        Initializes an `Interaction` object for iterative segmentation refinement.
+        """
         self.args = args
         self.pre_transforms = pre_transforms
         self.post_transforms = post_transforms
@@ -67,6 +105,22 @@ class Interaction:
         engine: Union[SupervisedTrainer, SupervisedEvaluator],
         batchdata: Dict[str, torch.Tensor],
     ):
+        """
+        Executes the interactive segmentation process.
+
+        This method performs iterative refinement of segmentation predictions by applying user interactions 
+        until a desired DSC is reached or the maximum number of interactions is exhausted.
+
+        Args:
+            engine (Union[SupervisedTrainer, SupervisedEvaluator]): MONAI engine for training/evaluation.
+            batchdata (Dict[str, torch.Tensor]): Dictionary containing image, label, and guidance data.
+
+        Returns:
+            Dict[str, torch.Tensor]: Processed batch data with final predictions.
+        
+        Raises:
+            ValueError: If `batchdata` is None.
+        """
         if batchdata is None:
             raise ValueError("Must provide batch data for current iteration.")
         
@@ -101,8 +155,6 @@ class Interaction:
             # In case of a semantic mask there is a single instance representing all lesions.
             for instance_id in range(1, self.num_instances_to_correct+1): # Start a new lesion
                 new_image_flag = True
-                
-                
                 logger.info(f">> Starting local interaction cycle for instance: {instance_id}")
                 
                 # Initialize local counters
