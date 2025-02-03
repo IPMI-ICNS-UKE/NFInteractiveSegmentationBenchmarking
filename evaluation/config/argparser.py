@@ -2,6 +2,15 @@ import argparse
 import os
 
 def parse_args():
+    """
+    Parses command-line arguments for the Interactive Segmentation Evaluation Pipeline.
+
+    This function defines various options for configuring the evaluation process, including
+    model selection, dataset handling, evaluation mode, and hardware settings.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments with appropriate configurations.
+    """
     parser = argparse.ArgumentParser(description="Evaluation Pipeline for Interactive Segmentation")
     
     # General arguments
@@ -57,7 +66,6 @@ def parse_args():
         
     # Derived arguments based on network type
     args.model_dir = os.path.join(args.model_weights_dir, args.network_type, f"fold_{args.fold}")
-    
     
     if args.network_type == "SW-FastEdit":
         args.checkpoint_name = "checkpoint.pt"
