@@ -1,38 +1,50 @@
+# This file contains code from the SW-FastEdit repository:
+# https://github.com/Zrrr1997/SW-FastEdit
+#
+# The original implementation accompanies the following research paper:
+#
+# M. Hadlich, Z. Marinov, M. Kim, E. Nasca, J. Kleesiek, and R. Stiefelhagen,
+# "Sliding Window Fastedit: A Framework for Lesion Annotation in Whole-Body PET Images,"
+# 2024 IEEE International Symposium on Biomedical Imaging (ISBI), Athens, Greece, 2024, 
+# pp. 1-5, doi: 10.1109/ISBI56570.2024.10635459.
+#
+# Keywords: Training; Image segmentation; Solid modeling; Annotations; Memory management;
+# Whole-body PET; Manuals; Interactive Segmentation; PET; Sliding Window; 
+# Lung Cancer; Melanoma; Lymphoma
+#
+# The majority of the classes in this file were taken without modification from the 
+# original SW-FastEdit repository.
+
+from typing import Dict, Hashable, List, Mapping, Tuple
+from enum import IntEnum
+import logging
+import gc
+
 from __future__ import annotations
 
-import gc
-import logging
-from typing import Dict, Hashable, List, Mapping, Tuple
-
+from scipy.ndimage import label
 import torch
 from monai.config import KeysCollection
 from monai.data import MetaTensor, PatchIterd
 from monai.losses import DiceLoss
+from monai.utils.enums import CommonKeys
 from monai.networks.layers import GaussianFilter
+from monai.transforms.utils import distance_transform_edt
 from monai.transforms import (
-    Activationsd,
     AsDiscreted,
     Compose,
     MapTransform,
     Randomizable,
 )
-from monai.utils.enums import CommonKeys
-from enum import IntEnum
-from monai.transforms.utils import distance_transform_edt
-
 from evaluation.utils.distance_transform import get_random_choice_from_tensor
-from evaluation.utils.helper import get_tensor_at_coordinates, get_global_coordinates_from_patch_coordinates
-
-import torch
-import numpy as np
-from scipy.ndimage import label
-from monai.data.meta_obj import get_track_meta
-from monai.data import MetaTensor
-
+from evaluation.utils.helper import (
+    get_tensor_at_coordinates, 
+    get_global_coordinates_from_patch_coordinates
+)
 
 logger = logging.getLogger("evaluation_pipeline_logger")
-
 LABELS_KEY = "label_names"
+
 
 class ClickGenerationStrategy(IntEnum):
     # Sample a click randomly based on the label, so no correction based on the prediction
@@ -47,9 +59,6 @@ class ClickGenerationStrategy(IntEnum):
     
 
 class AddEmptySignalChannels(MapTransform):
-    '''Taken from here:
-    https://github.com/Zrrr1997/SW-FastEdit/blob/main/src/sw_fastedit/transforms.py
-    '''
     def __init__(self, device, keys: KeysCollection = None):
         """
         Adds empty channels to the signal which will be filled with the guidance signal later.
@@ -218,12 +227,8 @@ class AddGuidanceSignal(MapTransform):
         raise UserWarning("image key has not been been found")
 
 
-
 class FindDiscrepancyRegions(MapTransform):
     """
-    Taken from here:
-    https://github.com/Zrrr1997/SW-FastEdit/blob/main/src/sw_fastedit/transforms.py
-    
     Find discrepancy between prediction and actual during click interactions during training.
 
     Args:
@@ -298,6 +303,7 @@ class FindDiscrepancyRegions(MapTransform):
                 logger.error("This transform only applies to 'label' key")
         raise UserWarning
 
+
 def get_guidance_tensor_for_key_label(data, key_label, device) -> torch.Tensor:
     """Makes sure the guidance is in a tensor format."""
     tmp_gui = data.get(key_label, torch.tensor([], dtype=torch.int32, device=device))
@@ -305,6 +311,7 @@ def get_guidance_tensor_for_key_label(data, key_label, device) -> torch.Tensor:
         tmp_gui = torch.tensor(tmp_gui, dtype=torch.int32, device=device)
     assert type(tmp_gui) is torch.Tensor or type(tmp_gui) is MetaTensor
     return tmp_gui
+
 
 class AddGuidance(Randomizable, MapTransform):
     """
@@ -531,4 +538,3 @@ class ConnectedComponentAnalysisd(MapTransform):
             instance_mask = torch.tensor(labeled_mask, dtype=torch.int32, device=data[key].device)  # Convert back to tensor
             data[key] = MetaTensor(instance_mask, meta=meta)        
         return data
-
