@@ -178,6 +178,7 @@ data/processed/*
 *.pt
 *.pth
 experiments/*
+!experiments/README.MD
 launchers/log
 best_ckpt/
 sam2_logs/
