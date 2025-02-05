@@ -1,6 +1,6 @@
-from monai.networks.nets.dynunet import DynUNet
 import logging
 import os
+from monai.networks.nets.dynunet import DynUNet
 import torch
 
 from evaluation.networks.custom_networks import DINsNetwork, SAM2Network, SimpleClick3DNetwork
@@ -9,6 +9,27 @@ logger = logging.getLogger("evaluation_pipeline_logger")
 
 
 def get_network(args, device):
+    """
+    Loads and returns the appropriate segmentation network based on the specified network type.
+
+    Args:
+        args (Any): Parsed command-line arguments containing network configuration details.
+            - `model_dir` (str): Directory where the model checkpoint is stored.
+            - `checkpoint_name` (str): Name of the model checkpoint file.
+            - `network_type` (str): Type of network to load (`SW-FastEdit`, `DINs`, `SimpleClick`, or `SAM2`).
+            - `labels` (list): List of label classes for segmentation.
+            - `checkpoint_propagator` (str, optional): Additional checkpoint file for SimpleClick.
+            - `config_name` (str, optional): Configuration file name for SAM2.
+            - `cache_dir` (str, optional): Directory for caching in SAM2.
+        device (torch.device): The computation device (`cuda` or `cpu`).
+
+    Returns:
+        nn.Module: The selected deep learning model ready for inference.
+
+    Raises:
+        FileNotFoundError: If the model checkpoint file is not found.
+        ValueError: If an unsupported network type is specified.
+    """
     model_path = os.path.join(args.model_dir, args.checkpoint_name)
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file {model_path} not found.")
@@ -34,9 +55,8 @@ def get_network(args, device):
         network.to(device)
         
     elif args.network_type == "DINs":
-        # The original DINs model was trained with and Tensorflow 2.8 version.
-        # For re-usability the DINs model was exported as ONNX 
-        # and launched as an ONNX runtime
+        # The original DINs model was trained with Tensorflow 2.8.
+        # For reusability, it was exported as ONNX and is launched as an ONNX runtime.
         providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         network = DINsNetwork(model_path, providers, device)
         
