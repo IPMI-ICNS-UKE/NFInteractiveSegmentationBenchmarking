@@ -1,20 +1,44 @@
 import os
-import tensorflow as tf
 import tf2onnx
-
 import tensorflow as tf
-from tensorflow.keras import Model, Sequential
 from tensorflow.keras import layers as L
 from tensorflow.keras.regularizers import l2
+from tensorflow.keras import Model, Sequential
 from tensorflow_addons import layers as La
 
+
 def unfold(inp):
+    """
+    Splits a three-digit integer into separate values for kernel sizes or strides.
+    
+    Args:
+        inp (int): A three-digit integer.
+
+    Returns:
+        tuple: Three separate integers.
+    """
     return inp // 100, (inp % 100) // 10, inp % 10
 
 
 class ConvBlock(L.Layer):
+    """
+    A convolutional block containing two Conv3D layers, instance normalization, and ReLU activation.
+    Supports optional upsampling via Conv3DTranspose.
+    """
     def __init__(self, opt, filters, kernel, strides=111,
                  up=False, up_kernel=None, up_strides=None, **kwargs):
+        """
+        Initializes the ConvBlock.
+        
+        Args:
+            opt: Configuration options containing weight decay.
+            filters (int): Number of filters in the convolutional layers.
+            kernel (int): Kernel size as a three-digit integer.
+            strides (int): Stride size as a three-digit integer.
+            up (bool, optional): If True, enables upsampling. Defaults to False.
+            up_kernel (int, optional): Kernel size for upsampling. Defaults to None.
+            up_strides (int, optional): Stride size for upsampling. Defaults to None.
+        """
         super(ConvBlock, self).__init__(**kwargs)
         kernel = unfold(kernel)
         strides = unfold(strides)
@@ -40,6 +64,16 @@ class ConvBlock(L.Layer):
                 name="up")
 
     def call(self, x, training=True, **kwargs):
+        """
+        Forward pass of the convolutional block.
+        
+        Args:
+            x: Input tensor.
+            training (bool, optional): Whether in training mode. Defaults to True.
+        
+        Returns:
+            Tensor: Processed output.
+        """
         if hasattr(self, "up"):
             y, x = x
             x = self.cat([y, self.up(x)])
@@ -54,7 +88,18 @@ class ConvBlock(L.Layer):
 
 
 class DINs(Model):
+    """
+    Deep Interactive Networks (DINs) model for medical image segmentation.
+    """
     def __init__(self, opt, logger, name="model"):
+        """
+        Initializes the DINs model.
+        
+        Args:
+            opt: Configuration options.
+            logger: Logger instance.
+            name (str, optional): Model name. Defaults to "model".
+        """
         super(DINs, self).__init__(name=name)
         self.init_channel = opt.init_channel
         self.max_channels = opt.max_channels
@@ -83,6 +128,16 @@ class DINs(Model):
 
 
     def call(self, x, training=True, **kwargs):
+        """
+        Forward pass of the DINs model.
+        
+        Args:
+            x: Tuple containing image and guide tensors.
+            training (bool, optional): Whether in training mode. Defaults to True.
+        
+        Returns:
+            Tensor: Model output.
+        """
         image, guide = x
         x = tf.concat((image, guide), axis=-1)
         small_guide = self.dim(guide)
@@ -107,69 +162,78 @@ class DINs(Model):
         }
 
 
-
 # Define the root directory containing the folds
 class Opt:
+    """
+    A simple configuration class that initializes attributes from a dictionary.
+
+    Args:
+        options (Dict[str, Any]): Dictionary containing key-value pairs of configuration parameters.
+    """
     def __init__(self, options):
         for key, value in options.items():
             setattr(self, key, value)
-            
-root_dir = "DINs_finetuned"
-input_shape = [
-    (None, 10, 512, 160, 1),
-    (None, 10, 512, 160, 2)
-]
-opt_dict = {
-    "init_channel": 30,
-    "max_channels": 320,
-    "n_class": 2,
-    "weight_decay": 3e-5,
-    "gamma": 1.,
+
+
+if __name__ == "__main__":
+    # Define the root directory containing the trained model folds
+    root_dir = "DINs_finetuned"
+    input_shape = [
+        (None, 10, 512, 160, 1), # Shape for image input
+        (None, 10, 512, 160, 2) # Shape for guidance input
+    ]
     
-}
-
-opt = Opt(opt_dict)
-
-# Iterate through each fold directory
-for fold in os.listdir(root_dir):
-    fold_path = os.path.join(root_dir, fold)
-    ckpt_dir = os.path.join(fold_path, "bestckpt")
-
-    if os.path.isdir(ckpt_dir):
-        print(f"Processing: {fold}")
-
-        # Create a dummy model instance (similar structure as the original)
-        model = DINs(opt=opt, logger=None)  # Provide correct opt and logger if needed
-        model.build(input_shape)
+    # Define model configuration parameters
+    opt_dict = {
+        "init_channel": 30,
+        "max_channels": 320,
+        "n_class": 2,
+        "weight_decay": 3e-5,
+        "gamma": 1.,
         
-        #  Find latest checkpoint
-        ckpt_path = tf.train.latest_checkpoint(ckpt_dir)
-        if ckpt_path is None:
-            raise FileNotFoundError(f"No checkpoint found in {ckpt_dir}")
-        
-        # Load model weights from checkpoint
-        checkpoint = tf.train.Checkpoint(model=model)
-        checkpoint.restore(ckpt_path).expect_partial()
-        print(f"Successfully restored model from {ckpt_path}")
-        
-        # Convert the loaded model to ONNX format
-        input_signature = [
-            tf.TensorSpec(shape=input_shape[0], dtype=tf.float32, name="image"),
-            tf.TensorSpec(shape=input_shape[1], dtype=tf.float32, name="guide")
-        ]
+    }
 
-        @tf.function(input_signature=[input_signature])
-        def model_inference(input_data):
-            return model(input_data, training=False)
+    opt = Opt(opt_dict)
 
+    # Iterate through each fold directory
+    for fold in os.listdir(root_dir):
+        fold_path = os.path.join(root_dir, fold)
+        ckpt_dir = os.path.join(fold_path, "bestckpt")
 
-        onnx_model_path = os.path.join(fold_path, "checkpoint.onnx")
+        if os.path.isdir(ckpt_dir):
+            print(f"Processing: {fold}")
 
-        model_proto, external_tensor_storage = tf2onnx.convert.from_function(
-            model_inference,
-            input_signature=[input_signature],
-            opset=13,  # Use an appropriate ONNX opset version
-            output_path=onnx_model_path
-        )
+            # Create a dummy model instance with the same structure as the original
+            model = DINs(opt=opt, logger=None)  # Provide correct opt and logger if needed
+            model.build(input_shape)
+            
+            # Find the latest checkpoint in the directory
+            ckpt_path = tf.train.latest_checkpoint(ckpt_dir)
+            if ckpt_path is None:
+                raise FileNotFoundError(f"No checkpoint found in {ckpt_dir}")
+            
+            # Load model weights from the checkpoint
+            checkpoint = tf.train.Checkpoint(model=model)
+            checkpoint.restore(ckpt_path).expect_partial()
+            print(f"Successfully restored model from {ckpt_path}")
+            
+            # Convert the loaded model to ONNX format
+            input_signature = [
+                tf.TensorSpec(shape=input_shape[0], dtype=tf.float32, name="image"),
+                tf.TensorSpec(shape=input_shape[1], dtype=tf.float32, name="guide")
+            ]
 
-        print(f"Successfully converted {fold} to {onnx_model_path}")
+            @tf.function(input_signature=[input_signature])
+            def model_inference(input_data):
+                return model(input_data, training=False)
+
+            onnx_model_path = os.path.join(fold_path, "checkpoint.onnx")
+
+            model_proto, external_tensor_storage = tf2onnx.convert.from_function(
+                model_inference,
+                input_signature=[input_signature],
+                opset=13,  # Use an appropriate ONNX opset version
+                output_path=onnx_model_path
+            )
+
+            print(f"Successfully converted {fold} to {onnx_model_path}")

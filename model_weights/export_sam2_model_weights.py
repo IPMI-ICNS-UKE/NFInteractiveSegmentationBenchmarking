@@ -3,6 +3,7 @@ import os
 
 root_dir = "SAM2_finetuned"
 
+# This script processes fine-tuned SAM2 model checkpoint files by extracting only the model weights.
 for fold in os.listdir(root_dir):
     fold_path = os.path.join(root_dir, fold)
     ckpt_path = os.path.join(fold_path, "checkpoints", "checkpoint.pt")
