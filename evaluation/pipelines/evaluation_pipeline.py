@@ -1,3 +1,14 @@
+import logging
+import torch
+import numpy as np
+from monai.engines import SupervisedEvaluator
+from monai.handlers import (
+    MeanDice,
+    StatsHandler,
+    from_engine,
+)
+
+# Importing custom functions and classes
 from evaluation.config.argparser import parse_args
 from evaluation.transforms.get_transforms import (
     get_pre_transforms, 
@@ -5,30 +16,36 @@ from evaluation.transforms.get_transforms import (
     get_interaction_post_transforms,
     get_post_transforms
 )
-    
 from evaluation.data.dataloader import get_evaluation_data_loader
 from evaluation.networks.networks import get_network
 from evaluation.networks.get_inferers import get_inferer
 from evaluation.interaction.interaction import Interaction
-import logging
-
-import torch
-
-from monai.engines import SupervisedEvaluator
 from evaluation.transforms.custom_transforms import ClickGenerationStrategy
 from evaluation.utils.logger import get_logger, setup_loggers
-
-from monai.handlers import (
-    MeanDice,
-    StatsHandler,
-    from_engine,
-)
-import numpy as np
 
 logger = logging.getLogger("evaluation_pipeline_logger")
 
 
 def run_pipeline(args):
+    """
+    Executes the evaluation pipeline for interactive segmentation.
+
+    This function sets up the necessary transformations, data loader, network,
+    inferer, metrics, and handlers required for evaluating an interactive segmentation
+    model. The evaluator runs the pipeline and computes performance metrics.
+
+    Args:
+        args (Any): Parsed command-line arguments containing the configuration settings.
+            - `use_gpu` (bool): Flag to determine if GPU should be used.
+            - `log_dir` (str): Directory for storing logs.
+            - `num_lesions` (int): Number of lesion instances to correct.
+            - `num_interactions_per_lesion` (int): Maximum interactions per lesion.
+            - `num_interactions_total_max` (int): Maximum total interactions allowed.
+            - `dsc_local_max` (float): Dice similarity coefficient stopping criterion at the local level.
+            - `dsc_global_max` (float): Dice similarity coefficient stopping criterion at the global level.
+            - `labels` (dict): Mapping of label names to numerical IDs.
+            - `interaction_probability` (float): Probability of user interaction per iteration.
+    """
     for arg in vars(args):
         logger.info("USING:: {} = {}".format(arg, getattr(args, arg)))
     device = torch.device("cuda" if args.use_gpu else "cpu")
@@ -86,6 +103,14 @@ def run_pipeline(args):
 
 
 def main():
+    """
+    Entry point for executing the segmentation evaluation pipeline.
+
+    - Seeds random generators for reproducibility.
+    - Parses command-line arguments.
+    - Sets up logging.
+    - Runs the segmentation pipeline.
+    """
     global logger
     torch.manual_seed(42)
     np.random.seed(42)
@@ -95,6 +120,7 @@ def main():
     logger = get_logger()
 
     run_pipeline(args)
+
 
 if __name__ == "__main__":
     main()
