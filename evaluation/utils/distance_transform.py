@@ -1,5 +1,17 @@
-# Taken from here:
-# https://github.com/Zrrr1997/SW-FastEdit/blob/main/src/sw_fastedit/utils/distance_transform.py 
+# This file contains code from the SW-FastEdit repository:
+# https://github.com/Zrrr1997/SW-FastEdit
+#
+# The original implementation accompanies the following research paper:
+#
+# M. Hadlich, Z. Marinov, M. Kim, E. Nasca, J. Kleesiek, and R. Stiefelhagen,
+# "Sliding Window Fastedit: A Framework for Lesion Annotation in Whole-Body PET Images,"
+# 2024 IEEE International Symposium on Biomedical Imaging (ISBI), Athens, Greece, 2024, 
+# pp. 1-5, doi: 10.1109/ISBI56570.2024.10635459.
+#
+# Keywords: Training; Image segmentation; Solid modeling; Annotations; Memory management;
+# Whole-body PET; Manuals; Interactive Segmentation; PET; Sliding Window; 
+# Lung Cancer; Melanoma; Lymphoma
+
 from __future__ import annotations
 
 import logging
