@@ -29,7 +29,7 @@ We introduce a unified **evaluation pipeline** that enables automated assessment
 
 Below is an illustration of the **lesion-wise interaction scenario:**
 
-![Lesion-wise Interaction Pipeline](assets/figure_1.png)
+![Lesion-wise Interaction Pipeline](assets/figure_1_git.png)
 
 
 ### Evaluated Models
@@ -41,11 +41,11 @@ This repository evaluates and benchmarks the following interactive segmentation 
 - **[SimpleClick](https://github.com/uncbiag/SimpleClick/tree/v1.0) + [STCN](https://github.com/uncbiag/iSegFormer/tree/v2.0/maskprop/Med-STCN) (STILL UNDER DEVELOPMENT)** - Transformer-based interactive segmentation model operating in 2D + segmentation propagation model.
 - **[SAM2 (Segment Anything Model 2)](https://github.com/facebookresearch/sam2/tree/main)** - Transformer-based model extending 2D segmentation into videos. We applied its frame-wise processing to slices of 3D whole-body MRI along the anterior-posterior axis.
 
-The figure below presents examples of neurofibroma segmentation predicted by different fine-tuned models in a **lesion-wise interaction scenario** (3 interactions per 20 largest lesions) on two cases:
+The figure below presents examples of neurofibroma segmentation predicted by different fine-tuned models in the **lesion-wise interaction scenario** (3 interactions per 20 largest lesions) on two cases:
 - Left three images → High tumor burden case
 - Right three images → Low tumor burden case
 
-![Neurofibroma segmentation results](assets/figure_2.png)
+![Neurofibroma segmentation results](assets/figure_2_git.png)
 
 Color coding for segmentation performance:
 - True Positives → Yellow
